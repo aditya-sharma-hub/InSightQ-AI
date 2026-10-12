@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html><head><title>Syntax Test</title></head>
+<body>
+<h2 id="result">Testing...</h2>
+<script>
+  try {
+    // Test the exact pattern used in app.js
+    var test = true && (() => {
+      const x = 1;
+      return x;
+    })();
+    document.getElementById('result').textContent = 'Arrow IIFE OK: ' + test;
+  } catch(e) {
+    document.getElementById('result').textContent = 'Arrow IIFE ERROR: ' + e.message;
+  }
+</script>
+
+<h2 id="result2">Loading app.js...</h2>
+<script>
+  // Attempt to load app.js dynamically to catch its error
+  var s = document.createElement('script');
+  s.onerror = function(e) {
+    document.getElementById('result2').textContent = 'app.js LOAD ERROR: ' + JSON.stringify(e);
+  };
+  s.src = './app.js';
+  // We can't catch syntax errors from external scripts easily, 
+  // so let's try eval instead
+</script>
+
+<h2 id="result3">Eval test...</h2>
+<script>
+  fetch('./app.js').then(r => r.text()).then(code => {
+    try {
+      // Just parse, don't execute
+      new Function(code);
+      document.getElementById('result3').textContent = 'app.js PARSE OK via new Function()';
+    } catch(e) {
+      document.getElementById('result3').textContent = 'app.js PARSE ERROR: ' + e.message + ' (line info unavailable via Function constructor)';
+      // Try to find the exact location
+      document.getElementById('result3').innerHTML += '<br>Error: ' + e.stack;
+    }
+  });
+</script>
+</body>
+</html>

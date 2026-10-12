@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html>
+<head><title>Debug</title></head>
+<body>
+<h1>Debug Page</h1>
+<div id="results"></div>
+<script>
+const el = document.getElementById('results');
+function log(msg) { el.innerHTML += '<p>' + msg + '</p>'; console.log(msg); }
+
+log('React: ' + (typeof window.React));
+log('ReactDOM: ' + (typeof window.ReactDOM));
+log('supabase: ' + (typeof window.supabase));
+</script>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+setTimeout(() => {
+  log('--- After CDN Load ---');
+  log('React: ' + (typeof window.React));
+  log('ReactDOM: ' + (typeof window.ReactDOM));
+  log('supabase: ' + (typeof window.supabase));
+  log('supabase.createClient: ' + (typeof window.supabase?.createClient));
+}, 2000);
+</script>
+</body>
+</html>
+</script>
+</CodeContent>
+<parameter name="Description">Quick debug page to check if CDN libraries load properly

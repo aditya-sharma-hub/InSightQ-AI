@@ -1,0 +1,2 @@
+cd "C:\Users\admin\Desktop\MINOR Project\Project-2"
+powershell -ExecutionPolicy Bypass -File .\server.ps1

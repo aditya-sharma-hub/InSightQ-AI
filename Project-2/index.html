@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>InsightIQ AI — Modern SaaS Authentication</title>
+  <meta name="description" content="InsightIQ AI Modern SaaS Authentication Experience prepared for Supabase Auth." />
+  
+  <!-- Preconnect to Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+
+  <!-- Core Design System Stylesheets -->
+  <link rel="stylesheet" href="./styles/variables.css" />
+  <link rel="stylesheet" href="./styles/typography.css" />
+  <link rel="stylesheet" href="./styles/animations.css" />
+  <link rel="stylesheet" href="./styles/layout.css" />
+  <link rel="stylesheet" href="./styles/components.css" />
+
+  <!-- Redesigned SaaS Authentication Stylesheets -->
+  <link rel="stylesheet" href="./styles/auth/mesh-background.css" />
+  <link rel="stylesheet" href="./styles/auth/oauth-buttons.css" />
+  <link rel="stylesheet" href="./styles/auth/auth-card.css" />
+
+  <!-- React 18 & Supabase UMD Runtimes (Works on file:// and http://) -->
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <!-- Supabase Library -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <!-- SheetJS XLSX Library for Client-Side Dataset Extraction -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <!-- jsPDF & jsPDF-AutoTable for Real Multi-Page Binary PDF Generation -->
+  <script src="./node_modules/jspdf/dist/jspdf.umd.min.js"></script>
+  <script src="./node_modules/jspdf-autotable/dist/jspdf.plugin.autotable.min.js"></script>
+  <script>
+    if (!window.jspdf) {
+      document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"><\/script>');
+      document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"><\/script>');
+    }
+  </script>
+</head>
+<body>
+  <div id="root"></div>
+
+  <!-- Error Catcher (Debug) -->
+  <script>
+    window.onerror = function(msg, url, line, col, err) {
+      document.getElementById('root').innerHTML = '<div style="padding:40px;font-family:monospace;color:red;background:#1a1a2e;"><h2>JS Error Detected</h2><p>' + msg + '</p><p>File: ' + url + ' Line: ' + line + '</p><pre>' + (err && err.stack ? err.stack : 'no stack') + '</pre></div>';
+      return false;
+    };
+    window.addEventListener('unhandledrejection', function(e) {
+      document.getElementById('root').innerHTML += '<div style="padding:20px;font-family:monospace;color:orange;background:#1a1a2e;"><h3>Unhandled Promise Rejection</h3><pre>' + (e.reason && e.reason.stack ? e.reason.stack : e.reason) + '</pre></div>';
+    });
+  </script>
+
+  <!-- Standalone Application Script -->
+  <script src="./app.js"></script>
+</body>
+</html>
+

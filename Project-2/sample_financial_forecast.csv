@@ -1,0 +1,9 @@
+quarter,region,product_line,revenue_usd,expenses_usd,net_margin_pct,growth_rate
+Q1_2025,North America,Cloud Analytics,4500000,2800000,37.78,14.5
+Q1_2025,Europe,Cloud Analytics,2800000,1950000,30.36,11.2
+Q1_2025,Asia Pacific,Cloud Analytics,3100000,1800000,41.94,22.8
+Q2_2025,North America,Cloud Analytics,5100000,3000000,41.18,13.3
+Q2_2025,Europe,Cloud Analytics,3200000,2100000,34.38,14.2
+Q2_2025,Asia Pacific,Cloud Analytics,3900000,2150000,44.87,25.8
+Q3_2025,North America,Cloud Analytics,5800000,3200000,44.83,13.7
+Q3_2025,Europe,Cloud Analytics,3600000,2300000,36.11,12.5

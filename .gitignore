@@ -1,0 +1,18 @@
+# Environment & Secrets
+.env
+.env.local
+.env.*.local
+*.env
+
+# Dependencies
+node_modules/
+
+# Logs & Temporary files
+*.log
+scratch/
+.cache/
+dist/
+build/
+.DS_Store
+Thumbs.db
+*.zip

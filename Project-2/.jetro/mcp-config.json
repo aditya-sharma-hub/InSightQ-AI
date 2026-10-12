@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "jetro": {
+      "command": "C:\\Users\\Aditya\\.jetro\\runtime\\node-win32-x64.exe",
+      "args": [
+        "C:\\Users\\Aditya\\.jetro\\mcp-server\\index.js"
+      ],
+      "env": {
+        "JET_WORKSPACE": "c:\\Users\\Aditya\\Desktop\\MINOR PROJECT\\AI Business\\Project-2",
+        "JET_API_URL": "https://api.jetro.ai",
+        "PATH": "C:\\Users\\Aditya\\.jetro\\runtime;C:\\Windows\\system32;C:\\Windows;C:\\Windows\\System32\\Wbem;C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\;C:\\Windows\\System32\\OpenSSH\\;C:\\Program Files\\dotnet\\;C:\\Program Files\\Git\\cmd;C:\\Program Files\\nodejs\\;C:\\Users\\Aditya\\.local\\bin;C:\\Users\\Aditya\\AppData\\Local\\pi-node\\current;C:\\Users\\Aditya\\AppData\\Local\\Programs\\OpenAI\\Codex\\bin;C:\\Users\\Aditya\\AppData\\Local\\Microsoft\\WindowsApps;C:\\Users\\Aditya\\AppData\\Local\\Programs\\Antigravity IDE\\bin;C:\\Users\\Aditya\\AppData\\Local\\Programs\\Microsoft VS Code\\bin;C:\\Users\\Aditya\\AppData\\Roaming\\npm;C:\\Users\\Aditya\\AppData\\Local\\Python\\bin"
+      }
+    }
+  }
+}

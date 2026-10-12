@@ -1,0 +1,28 @@
+{
+  "name": "insightiq-ai",
+  "version": "1.0.0",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node test_regression_workspace_init.js",
+    "test:init": "node test_regression_workspace_init.js",
+    "test:ml": "node test_ml_real_training.js"
+  },
+  "dependencies": {
+    "@google/genai": "^2.17.1",
+    "@supabase/supabase-js": "^2.112.2",
+    "cors": "^2.8.6",
+    "dotenv": "^16.6.1",
+    "express": "^4.22.2",
+    "jspdf": "^4.2.1",
+    "jspdf-autotable": "^5.0.8",
+    "pdf-parse": "^2.4.5"
+  },
+  "devDependencies": {
+    "acorn": "^8.18.0",
+    "d3-geo": "^3.1.1",
+    "puppeteer": "^25.5.0",
+    "topojson-client": "^3.1.0",
+    "typescript": "^7.0.2",
+    "world-atlas": "^2.0.2"
+  }
+}

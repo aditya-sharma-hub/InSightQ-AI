@@ -1,0 +1,160 @@
+/* ==========================================================================
+   InsightIQ AI - Design Tokens & CSS Custom Properties
+   Enterprise BI Dark Theme Palette, Spatial System & Elevation Tokens
+   ========================================================================== */
+
+:root {
+  /* Font Families */
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', Consolas, Monaco, monospace;
+
+  /* 8-Point Spacing System */
+  --space-2xs: 2px;
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 12px;
+  --space-lg: 16px;
+  --space-xl: 24px;
+  --space-2xl: 32px;
+  --space-3xl: 48px;
+  --space-4xl: 64px;
+
+  /* Border Radii */
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-2xl: 24px;
+  --radius-full: 9999px;
+
+  /* Motion & Transitions */
+  --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-normal: 200ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-slow: 300ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-spring: 400ms cubic-bezier(0.16, 1, 0.3, 1);
+
+  /* Layout Dimensions */
+  --sidebar-width-expanded: 240px;
+  --sidebar-width-collapsed: 64px;
+  --header-height: 60px;
+  --footer-height: 44px;
+  --container-max-width: 1680px;
+}
+
+/* ==========================================================================
+   ENTERPRISE DARK PALETTE (Primary Theme Target)
+   ========================================================================== */
+[data-theme="dark"], :root {
+  /* Primary Accent: Purple */
+  --color-purple-50: #191238;
+  --color-purple-100: #291a54;
+  --color-purple-400: #a78bfa;
+  --color-purple-500: #8b5cf6;
+  --color-purple-600: #7c3aed;
+  --color-purple-700: #6d28d9;
+
+  /* Secondary Accent: Electric Blue */
+  --color-blue-50: #0f1c3f;
+  --color-blue-100: #172a5e;
+  --color-blue-400: #60a5fa;
+  --color-blue-500: #3b82f6;
+  --color-blue-600: #2563eb;
+  --color-blue-700: #1d4ed8;
+
+  /* Analytical Accent: Cyan */
+  --color-cyan-50: #082838;
+  --color-cyan-100: #0c3e58;
+  --color-cyan-400: #38bdf8;
+  --color-cyan-500: #06b6d4;
+  --color-cyan-600: #0284c7;
+
+  /* Semantic States */
+  --color-success-50: #042417;
+  --color-success-400: #34d399;
+  --color-success-500: #10b981;
+  --color-success-600: #059669;
+
+  --color-warning-50: #2b1d04;
+  --color-warning-400: #fbbf24;
+  --color-warning-500: #f59e0b;
+  --color-warning-600: #d97706;
+
+  --color-error-50: #2e0a0d;
+  --color-error-400: #f87171;
+  --color-error-500: #ef4444;
+  --color-error-600: #dc2626;
+
+  /* Neutral Dark Scale (Deep Navy / Charcoal) */
+  --color-neutral-950: #05070c;
+  --color-neutral-900: #07090e;
+  --color-neutral-850: #090c14;
+  --color-neutral-800: #0e131f;
+  --color-neutral-750: #141a2b;
+  --color-neutral-700: #1b233a;
+  --color-neutral-650: #222d4a;
+  --color-neutral-600: #334155;
+  --color-neutral-500: #475569;
+  --color-neutral-400: #64748b;
+  --color-neutral-300: #94a3b8;
+  --color-neutral-200: #cbd5e1;
+  --color-neutral-100: #e2e8f0;
+  --color-neutral-50:  #f8fafc;
+
+  /* Semantic UI Tokens */
+  --bg-app: #07090e;
+  --bg-surface: #0e131f;
+  --bg-surface-elevated: #141a2b;
+  --bg-surface-hover: #1b233a;
+  --bg-surface-active: #222d4a;
+  --bg-sidebar: #080b12;
+  --bg-header: rgba(8, 11, 18, 0.88);
+  --bg-glass: rgba(14, 19, 31, 0.75);
+  --bg-subtle: #141a2b;
+  --bg-muted: #0e131f;
+
+  --text-primary: #f8fafc;
+  --text-secondary: #94a3b8;
+  --text-tertiary: #64748b;
+  --text-inverse: #07090e;
+  --text-brand: #8b5cf6;
+  --text-cyan: #38bdf8;
+  --text-blue: #60a5fa;
+
+  --border-subtle: rgba(255, 255, 255, 0.07);
+  --border-strong: rgba(255, 255, 255, 0.14);
+  --border-focus: #8b5cf6;
+  --border-glow: rgba(139, 92, 246, 0.4);
+
+  --ring-focus: rgba(139, 92, 246, 0.3);
+  --overlay-backdrop: rgba(3, 5, 10, 0.82);
+
+  /* Shadows & Subtle Glows */
+  --shadow-xs: 0 1px 2px 0 rgba(0, 0, 0, 0.5);
+  --shadow-sm: 0 2px 4px 0 rgba(0, 0, 0, 0.6);
+  --shadow-md: 0 6px 12px -2px rgba(0, 0, 0, 0.7);
+  --shadow-lg: 0 12px 24px -4px rgba(0, 0, 0, 0.8);
+  --shadow-xl: 0 24px 48px -8px rgba(0, 0, 0, 0.9);
+  --shadow-card: 0 10px 30px -10px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  --shadow-card-hover: 0 16px 36px -10px rgba(139, 92, 246, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+
+  --shadow-glow-purple: 0 0 20px rgba(139, 92, 246, 0.25);
+  --shadow-glow-cyan: 0 0 20px rgba(56, 189, 248, 0.25);
+  --shadow-glow-blue: 0 0 20px rgba(59, 130, 246, 0.25);
+}
+
+/* Light Theme Fallback Support */
+[data-theme="light"] {
+  --bg-app: #f4f6fa;
+  --bg-surface: #ffffff;
+  --bg-surface-elevated: #f8fafc;
+  --bg-surface-hover: #f1f5f9;
+  --bg-sidebar: #0f172a;
+  --bg-header: rgba(255, 255, 255, 0.9);
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-tertiary: #64748b;
+  --border-subtle: #e2e8f0;
+  --border-strong: #cbd5e1;
+  --shadow-card: 0 4px 12px rgba(15, 23, 42, 0.06);
+}
