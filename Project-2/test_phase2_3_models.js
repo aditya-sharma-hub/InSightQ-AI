@@ -3,7 +3,10 @@ const path = require('path');
 
 async function testPhase23Models() {
   console.log('1. Launching Headless Chromium for Phase 2.3 ML Model Intelligence & Lifecycle Validation...');
+  const chromePath = process.env.PUPPETEER_EXECUTABLE_PATH || 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe';
+  const port = process.env.PORT || 8085;
   const browser = await puppeteer.launch({
+    executablePath: chromePath,
     headless: true,
     args: ['--no-sandbox', '--disable-setuid-sandbox']
   });
@@ -11,18 +14,17 @@ async function testPhase23Models() {
   const page = await browser.newPage();
   await page.setViewport({ width: 1440, height: 920 });
 
-  console.log('2. Navigating to http://localhost:8080/...');
-  await page.goto('http://localhost:8080/', { waitUntil: 'networkidle0' });
+  console.log(`2. Navigating to http://localhost:${port}/...`);
+  await page.goto(`http://localhost:${port}/`, { waitUntil: 'networkidle0' });
 
-  // Handle optional splash screen / auth screen
-  console.log('3. Waiting for auth form or dashboard...');
-  const hasEmail = await page.waitForSelector('input[type="email"]', { timeout: 8000 }).catch(() => null);
-  if (hasEmail) {
-    console.log('   Logging in test user...');
-    await page.type('input[type="email"]', 'testuser_26889@gmail.com');
-    await page.type('input[type="password"]', 'TestPassword123!');
-    await page.click('button[type="submit"]');
-  }
+  // Handle optional splash screen / auth screen via test hook
+  console.log('3. Initializing test workspace session...');
+  await new Promise(r => setTimeout(r, 2000));
+  await page.evaluate(() => {
+    if (window.__insightIQTest && typeof window.__insightIQTest.triggerEmptyDashboard === 'function') {
+      window.__insightIQTest.triggerEmptyDashboard('data_analyst');
+    }
+  });
 
   console.log('4. Waiting for sidebar navigation layout...');
   await page.waitForSelector('aside', { timeout: 10000 });

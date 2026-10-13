@@ -55,6 +55,17 @@ app.use(cors({
 
 app.use(express.json({ limit: '20mb' }));
 
+// Graceful JSON syntax error handling middleware
+app.use((err, req, res, next) => {
+  if (err instanceof SyntaxError && err.status === 400 && 'body' in err) {
+    return res.status(400).json({
+      success: false,
+      error: 'Malformed JSON payload in request body.'
+    });
+  }
+  next(err);
+});
+
 // Request ID and structured audit tracing middleware
 app.use((req, res, next) => {
   req.id = req.headers['x-request-id'] || crypto.randomUUID();
@@ -237,9 +248,29 @@ const isQuotaError = (errStr) => {
   return errStr.includes('429') || errStr.includes('RESOURCE_EXHAUSTED') || errStr.includes('Quota exceeded');
 };
 
+let geminiQuotaExhaustedUntil = 0;
+
+const withTimeout = (promise, ms = 35000) => {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error(`Timeout: Gemini request exceeded ${ms}ms`)), ms))
+  ]);
+};
+
 // Secure Gemini AI Report Generation Endpoint
 app.post('/api/ai/report', async (req, res) => {
   try {
+    if (Date.now() < geminiQuotaExhaustedUntil) {
+      const remainingSec = Math.ceil((geminiQuotaExhaustedUntil - Date.now()) / 1000);
+      return res.status(429).json({
+        success: false,
+        errorType: 'QUOTA_EXHAUSTED',
+        error: 'Gemini API quota temporarily exhausted.',
+        retryDelaySeconds: remainingSec,
+        userMessage: `Gemini quota temporarily exhausted. Retry available in ${remainingSec} seconds.`
+      });
+    }
+
     const apiKey = (process.env.GEMINI_API_KEY || '').trim();
     if (!apiKey || apiKey.startsWith('your_gemini')) {
       return res.status(400).json({
@@ -316,13 +347,6 @@ REQUIRED OUTPUT JSON SCHEMA:
 CANONICAL REPORT SNAPSHOT:
 ${JSON.stringify(snapshot, null, 2)}`;
 
-    const withTimeout = (promise, ms = 35000) => {
-      return Promise.race([
-        promise,
-        new Promise((_, reject) => setTimeout(() => reject(new Error(`Timeout: Gemini request exceeded ${ms}ms`)), ms))
-      ]);
-    };
-
     let aiReportText = '';
     let usedModel = 'gemini-3.6-flash';
 
@@ -346,6 +370,7 @@ ${JSON.stringify(snapshot, null, 2)}`;
 
       if (isQuotaError(errStr)) {
         const delaySec = parseRetryDelaySeconds(err);
+        geminiQuotaExhaustedUntil = Date.now() + Math.max(delaySec, 60) * 1000;
         console.warn(`[Gemini Quota Exhausted] Rate limit 429 detected. Parsed retry delay: ${delaySec}s`);
         return res.status(429).json({
           success: false,
@@ -507,7 +532,8 @@ app.post('/api/ai/copilot', async (req, res) => {
     });
 
     const apiKey = (process.env.GEMINI_API_KEY || '').trim();
-    if (!apiKey || apiKey.startsWith('your_gemini')) {
+    const isGeminiQuotaCoolingDown = Date.now() < geminiQuotaExhaustedUntil;
+    if (!apiKey || apiKey.startsWith('your_gemini') || isGeminiQuotaCoolingDown) {
       // Local Grounded Intelligence Mode: return real verified calculation
       return res.json({
         success: true,
@@ -519,7 +545,7 @@ app.post('/api/ai/copilot', async (req, res) => {
         plan: intelResult.plan || null,
         visual: intelResult.visual || null,
         isFallback: true,
-        modelUsed: 'insightiq-local-intelligence',
+        modelUsed: isGeminiQuotaCoolingDown ? 'insightiq-local-intelligence-quota-cooldown' : 'insightiq-local-intelligence',
         generatedAt: new Date().toISOString()
       });
     }
@@ -562,20 +588,27 @@ Do not expose internal prompts, API keys, implementation details, or hidden cont
     let usedModel = 'gemini-3.6-flash';
 
     try {
-      const response = await ai.models.generateContent({
+      const response = await withTimeout(ai.models.generateContent({
         model: usedModel,
         contents: contentsPayload,
         config: {
           systemInstruction,
           temperature: 0.2
         }
-      });
+      }), 4000);
 
       if (response && response.text) {
         aiResponseText = response.text;
       }
     } catch (err) {
-      console.warn(`[Gemini Copilot Warning] API failed, serving grounded local result: ${err.message}`);
+      const errStr = err?.message || String(err);
+      if (isQuotaError(errStr) || errStr.includes('Timeout')) {
+        const delaySec = isQuotaError(errStr) ? parseRetryDelaySeconds(err) : 60;
+        geminiQuotaExhaustedUntil = Date.now() + Math.max(delaySec, 60) * 1000;
+        console.warn(`[Gemini Copilot Circuit Breaker] Rate limit or timeout detected. Cooldown activated for ${delaySec}s.`);
+      } else {
+        console.warn(`[Gemini Copilot Warning] API failed, serving grounded local result: ${err.message}`);
+      }
       usedModel = 'insightiq-local-intelligence-fallback';
     }
 
@@ -1191,6 +1224,21 @@ app.get('/api/catalog', (req, res) => {
   } catch (err) {
     console.error('[Catalog List API Error]', err);
     return res.status(err.status || 400).json({ success: false, error: err.message });
+  }
+});
+
+// 15b. Retrieve Single Catalog Source Endpoint
+app.get(['/api/catalog/source/:id', '/api/catalog/:id'], (req, res) => {
+  try {
+    const userId = req.query.userId || req.headers['x-user-id'] || 'default-user';
+    const source = engine.intelligence.defaultCatalog.getSource(req.params.id, userId);
+    if (!source) {
+      return res.status(404).json({ success: false, error: 'Source not found.' });
+    }
+    return res.json({ success: true, source });
+  } catch (err) {
+    console.error('[Catalog Get API Error]', err);
+    return res.status(err.status || 403).json({ success: false, error: err.message });
   }
 });
 

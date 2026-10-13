@@ -155,6 +155,19 @@ function detectFormat(buffer, filename = '', declaredMime = '') {
     };
   }
 
+  // 3b. Unrecognized binary check: if content contains null bytes (0x00) and is not a recognized binary or text format
+  const isTextExtension = ['csv', 'tsv', 'tab', 'json', 'jsonl', 'ndjson', 'txt', 'text', 'md', 'markdown', 'log'].includes(ext);
+  let nullByteCount = 0;
+  for (let i = 0; i < prefix.length; i++) {
+    if (prefix[i] === 0x00) nullByteCount++;
+  }
+  if (nullByteCount > 0 && !isTextExtension) {
+    return {
+      isValid: false,
+      error: 'Unrecognized or corrupted binary file format.'
+    };
+  }
+
   // 4. Text-based detection (UTF-8, UTF-16, ASCII)
   let text = '';
   try {

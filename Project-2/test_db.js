@@ -21,7 +21,8 @@ async function checkSchema() {
   });
 
   if (authError) {
-    console.error('Login failed:', authError);
+    console.error('Login failed:', authError.message || authError);
+    process.exitCode = 1;
     return;
   }
   console.log('Login successful for user:', authData.user.id);

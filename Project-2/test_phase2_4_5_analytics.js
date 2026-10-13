@@ -3,7 +3,10 @@ const path = require('path');
 
 async function testPhase245Analytics() {
   console.log('1. Launching Headless Chromium for Phase 2.4 & 2.5 Advanced Analytics & Forecasting Validation...');
+  const chromePath = process.env.PUPPETEER_EXECUTABLE_PATH || 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe';
+  const port = process.env.PORT || 8085;
   const browser = await puppeteer.launch({
+    executablePath: chromePath,
     headless: true,
     args: ['--no-sandbox', '--disable-setuid-sandbox']
   });
@@ -11,8 +14,8 @@ async function testPhase245Analytics() {
   const page = await browser.newPage();
   await page.setViewport({ width: 1440, height: 920 });
 
-  console.log('2. Navigating to http://localhost:8080/...');
-  await page.goto('http://localhost:8080/', { waitUntil: 'networkidle0' });
+  console.log(`2. Navigating to http://localhost:${port}/...`);
+  await page.goto(`http://localhost:${port}/`, { waitUntil: 'networkidle0' });
 
   console.log('3. Checking for auth form or dashboard...');
   const hasEmail = await page.waitForSelector('input[type="email"]', { timeout: 8000 }).catch(() => null);

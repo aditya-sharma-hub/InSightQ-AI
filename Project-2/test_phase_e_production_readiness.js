@@ -46,10 +46,17 @@ async function runAsyncTest(name, fn) {
 // HTTP Helper Utilities
 const makeRequest = (options, postData = null) => {
   return new Promise((resolve, reject) => {
+    const headers = { ...(options.headers || {}) };
+    let bodyStr = null;
+    if (postData !== null && postData !== undefined) {
+      bodyStr = typeof postData === 'string' ? postData : JSON.stringify(postData);
+      headers['Content-Length'] = Buffer.byteLength(bodyStr);
+    }
     const req = http.request({
       hostname: 'localhost',
       port: 8085,
-      ...options
+      ...options,
+      headers
     }, (res) => {
       let data = '';
       res.on('data', chunk => data += chunk);
@@ -69,8 +76,8 @@ const makeRequest = (options, postData = null) => {
     });
 
     req.on('error', reject);
-    if (postData) {
-      req.write(typeof postData === 'string' ? postData : JSON.stringify(postData));
+    if (bodyStr) {
+      req.write(bodyStr);
     }
     req.end();
   });

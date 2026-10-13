@@ -412,8 +412,13 @@ function trainSupervisedEngine(headers, rows, targetCol, options = {}) {
     // =========================================================================
     const rawTargetVals = trainSet.map(r => String(r[targetCol]).trim());
     const uniqueClasses = Array.from(new Set(rawTargetVals));
-    const posClass = uniqueClasses[0];
-    const negClass = uniqueClasses.length > 1 ? uniqueClasses[1] : 'other';
+    let posClass = uniqueClasses[0];
+    let negClass = uniqueClasses.length > 1 ? uniqueClasses[1] : 'other';
+    const canonicalPos = uniqueClasses.find(c => ['yes', 'true', '1', 'positive', 'churn', 'success', 'approved'].includes(c.toLowerCase()));
+    if (canonicalPos) {
+      posClass = canonicalPos;
+      negClass = uniqueClasses.find(c => c !== canonicalPos) || 'other';
+    }
 
     // Baseline: Majority Class Classifier
     const classCounts = {};
