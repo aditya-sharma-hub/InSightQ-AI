@@ -3,7 +3,7 @@
 -- Description: Repairs auth triggers and provisions missing tables (ml_models,
 --              workspaces, projects, notifications, anomaly_results, reports).
 -- How to apply: Copy and paste this script into the Supabase SQL Editor:
---               https://app.supabase.com/project/qldrqdnjpohyuhqvirmc/sql
+--               https://app.supabase.com/project/<your-project-id>/sql
 -- ============================================================================
 
 -- ----------------------------------------------------------------------------

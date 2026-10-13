@@ -1697,17 +1697,19 @@ window.CANONICAL_PROJECTS = CANONICAL_PROJECTS;
   /* --------------------------------------------------------------------------
      3. Production Supabase Client & Application Architecture
      -------------------------------------------------------------------------- */
-  const SUPABASE_URL = 'https://qldrqdnjpohyuhqvirmc.supabase.co';
-  const SUPABASE_ANON_KEY = 'sb_publishable_uPbLIWSlLfxv8NZbzN1Drw_YPTr21t1';
+  const SUPABASE_URL = (typeof window !== 'undefined' && (window.__ENV__?.VITE_SUPABASE_URL || window.localStorage?.getItem('insightiq_supabase_url'))) || '';
+  const SUPABASE_ANON_KEY = (typeof window !== 'undefined' && (window.__ENV__?.VITE_SUPABASE_PUBLISHABLE_KEY || window.localStorage?.getItem('insightiq_supabase_key'))) || '';
   
-  const supabaseClient = window.supabase?.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-    auth: {
-      persistSession: true,
-      autoRefreshToken: true,
-      detectSessionInUrl: true,
-      storageKey: 'insightiq_supabase_auth_token'
-    }
-  });
+  const supabaseClient = (typeof window !== 'undefined' && window.supabase && SUPABASE_URL && SUPABASE_ANON_KEY)
+    ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+        auth: {
+          persistSession: true,
+          autoRefreshToken: true,
+          detectSessionInUrl: true,
+          storageKey: 'insightiq_supabase_auth_token'
+        }
+      })
+    : null;
 
   /* --------------------------------------------------------------------------
      Canonical Type Resolver & Parser Utilities
@@ -2589,8 +2591,8 @@ window.CANONICAL_PROJECTS = CANONICAL_PROJECTS;
     };
   };
 
-  /* Ultra-Fast Single-Pass RFC-4180 Compliant CSV Parser (~200ms for 180,519 rows x 53 columns) */
-  const parseCSV = (text) => {
+  /* Ultra-Fast Single-Pass RFC-4180 Compliant CSV & Delimited Text Parser */
+  const parseCSV = (text, delimiter = ',') => {
     if (!text || typeof text !== 'string') return { headers: [], rows: [] };
 
     // Strip UTF-8 Byte Order Mark (BOM) if present
@@ -2598,6 +2600,16 @@ window.CANONICAL_PROJECTS = CANONICAL_PROJECTS;
     if (text.charCodeAt(0) === 0xFEFF) {
       startIdx = 1;
     }
+
+    // Auto-detect delimiter if not specified or defaulted to comma but content has TSV/semicolon/pipe
+    let delim = delimiter || ',';
+    if (!delimiter || delimiter === ',') {
+      const firstLine = text.slice(startIdx, startIdx + 2048).split(/[\r\n]+/)[0] || '';
+      if (!firstLine.includes(',') && firstLine.includes('\t')) delim = '\t';
+      else if (!firstLine.includes(',') && firstLine.includes(';')) delim = ';';
+      else if (!firstLine.includes(',') && firstLine.includes('|')) delim = '|';
+    }
+    const delimCode = delim.charCodeAt(0);
 
     const len = text.length;
     let i = startIdx;
@@ -2639,7 +2651,7 @@ window.CANONICAL_PROJECTS = CANONICAL_PROJECTS;
           let rawSlice = text.slice(fieldStart, i);
           value = hasEscapes ? rawSlice.replace(/""/g, '"') : rawSlice;
           if (i < len && text.charCodeAt(i) === 34) i++; // Skip closing quote
-          while (i < len && text.charCodeAt(i) !== 44 && text.charCodeAt(i) !== 10 && text.charCodeAt(i) !== 13) {
+          while (i < len && text.charCodeAt(i) !== delimCode && text.charCodeAt(i) !== 10 && text.charCodeAt(i) !== 13) {
             i++;
           }
         } else {
@@ -2647,7 +2659,7 @@ window.CANONICAL_PROJECTS = CANONICAL_PROJECTS;
           let fieldStart = i;
           while (i < len) {
             code = text.charCodeAt(i);
-            if (code === 44 || code === 10 || code === 13) break;
+            if (code === delimCode || code === 10 || code === 13) break;
             i++;
           }
           value = text.slice(fieldStart, i).trim();
@@ -2655,8 +2667,8 @@ window.CANONICAL_PROJECTS = CANONICAL_PROJECTS;
 
         row.push(value);
 
-        if (i < len && text.charCodeAt(i) === 44) {
-          i++; // Skip comma
+        if (i < len && text.charCodeAt(i) === delimCode) {
+          i++; // Skip delimiter
           if (i >= len || text.charCodeAt(i) === 10 || text.charCodeAt(i) === 13) {
             row.push('');
             if (i < len && text.charCodeAt(i) === 13) i++;
@@ -4073,6 +4085,8 @@ window.CANONICAL_PROJECTS = CANONICAL_PROJECTS;
     const [projectId, setProjectId] = React.useState((projects && projects[0] ? projects[0].id : '') || '');
     const [selectedFile, setSelectedFile] = React.useState(null);
     const [isDragging, setIsDragging] = React.useState(false);
+    const [availableSheets, setAvailableSheets] = React.useState([]);
+    const [selectedSheet, setSelectedSheet] = React.useState('');
     
     // Upload stages: 'idle' | 'selected' | 'uploading' | 'processing' | 'success' | 'error'
     const [uploadStage, setUploadStage] = React.useState('idle');
@@ -4107,6 +4121,8 @@ window.CANONICAL_PROJECTS = CANONICAL_PROJECTS;
         setDescription('');
         setSelectedFile(null);
         setIsDragging(false);
+        setAvailableSheets([]);
+        setSelectedSheet('');
         setUploadStage('idle');
         setUploadProgress(0);
         setErrorMessage('');
@@ -4116,10 +4132,10 @@ window.CANONICAL_PROJECTS = CANONICAL_PROJECTS;
 
     const validateAndSelectFile = (file) => {
       if (!file) return;
-      const ALLOWED = ['csv', 'xls', 'xlsx'];
+      const ALLOWED = ['csv', 'tsv', 'xls', 'xlsx', 'json', 'jsonl', 'txt', 'md', 'log', 'pdf', 'docx'];
       const ext = file.name.split('.').pop()?.toLowerCase();
       if (!ext || !ALLOWED.includes(ext)) {
-        setErrorMessage(`Invalid file format ".${ext || 'unknown'}". Supported formats: CSV, XLSX, XLS.`);
+        setErrorMessage(`Invalid file format ".${ext || 'unknown'}". Supported formats: CSV, TSV, XLSX, XLS, JSON, JSONL, TXT, MD, LOG, PDF, DOCX.`);
         setUploadStage('error');
         return;
       }
@@ -4139,6 +4155,37 @@ window.CANONICAL_PROJECTS = CANONICAL_PROJECTS;
       setName(file.name.replace(/\.[^/.]+$/, ''));
       setErrorMessage('');
       setUploadStage('selected');
+
+      // Pre-inspect Excel sheets if applicable
+      if (['xls', 'xlsx'].includes(ext) && window.XLSX) {
+        try {
+          const reader = new FileReader();
+          reader.onload = (e) => {
+            try {
+              const data = new Uint8Array(e.target.result);
+              const wb = window.XLSX.read(data, { type: 'array', bookSheets: true });
+              if (wb && Array.isArray(wb.SheetNames) && wb.SheetNames.length > 0) {
+                setAvailableSheets(wb.SheetNames);
+                setSelectedSheet(wb.SheetNames[0]);
+              } else {
+                setAvailableSheets([]);
+                setSelectedSheet('');
+              }
+            } catch (readErr) {
+              console.warn('[Excel Sheet Sniffer Warning]', readErr);
+              setAvailableSheets([]);
+              setSelectedSheet('');
+            }
+          };
+          reader.readAsArrayBuffer(file);
+        } catch (err) {
+          setAvailableSheets([]);
+          setSelectedSheet('');
+        }
+      } else {
+        setAvailableSheets([]);
+        setSelectedSheet('');
+      }
     };
 
     const handleFileChange = (e) => {
@@ -4187,7 +4234,8 @@ window.CANONICAL_PROJECTS = CANONICAL_PROJECTS;
         await onUploadSubmit(selectedFile, {
           name: name.trim() || selectedFile.name.replace(/\.[^/.]+$/, ''),
           description: description.trim(),
-          projectId: projectId || (projects && projects[0] ? projects[0].id : '')
+          projectId: projectId || (projects && projects[0] ? projects[0].id : ''),
+          sheetName: selectedSheet || undefined
         });
 
         setUploadProgress(100);
@@ -4452,7 +4500,7 @@ window.CANONICAL_PROJECTS = CANONICAL_PROJECTS;
             React.createElement('input', {
               type: 'file',
               ref: fileInputRef,
-              accept: '.csv,.xls,.xlsx,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+              accept: '.csv,.tsv,.xls,.xlsx,.json,.jsonl,.txt,.md,.log,.pdf,.docx,text/csv,text/tab-separated-values,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/json,text/plain,text/markdown,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document',
               style: { display: 'none' },
               onChange: handleFileChange
             }),
@@ -4492,7 +4540,7 @@ window.CANONICAL_PROJECTS = CANONICAL_PROJECTS;
               selectedFile ? React.createElement('div', { className: 'animate-fade-in' },
                 React.createElement('div', { style: { fontWeight: 700, color: '#FFFFFF', fontSize: '1rem', wordBreak: 'break-word' } }, selectedFile.name),
                 React.createElement('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 6 } },
-                  React.createElement('span', { className: 'badge badge-purple' }, fileFormat),
+                React.createElement('span', { className: 'badge badge-purple' }, fileFormat),
                   React.createElement('span', { style: { color: '#94A3B8', fontSize: '0.8125rem' } }, formattedSize),
                   React.createElement('span', { style: { color: '#38BDF8', fontSize: '0.8125rem', textDecoration: 'underline', marginLeft: 4 } }, 'Click to change file')
                 )
@@ -4501,13 +4549,49 @@ window.CANONICAL_PROJECTS = CANONICAL_PROJECTS;
                   'Choose a dataset file or drag & drop here'
                 ),
                 React.createElement('div', { style: { color: '#94A3B8', fontSize: '0.8125rem' } },
-                  'Supported formats: CSV, XLSX, XLS up to 500 MB'
+                  'Supported: CSV, TSV, XLSX, XLS, JSON, JSONL, TXT, MD, LOG, PDF, DOCX (up to 500 MB)'
                 ),
                 React.createElement('button', {
                   type: 'button',
                   className: 'btn-secondary-action',
                   style: { marginTop: 14, padding: '6px 16px', fontSize: '0.8125rem', pointerEvents: 'none' }
                 }, '📁 Browse Files')
+              )
+            ),
+
+            /* Multi-Sheet Excel Selection */
+            availableSheets && availableSheets.length > 1 && React.createElement('div', {
+              className: 'entity-form-group animate-fade-in',
+              style: {
+                marginBottom: 16,
+                padding: '12px 14px',
+                borderRadius: 10,
+                backgroundColor: 'rgba(56, 189, 248, 0.08)',
+                border: '1px solid rgba(56, 189, 248, 0.3)'
+              }
+            },
+              React.createElement('label', {
+                className: 'entity-form-label',
+                style: { display: 'block', fontSize: '0.8125rem', fontWeight: 700, color: '#38BDF8', marginBottom: 6 }
+              }, '📑 Select Excel Worksheet to Import:'),
+              React.createElement('select', {
+                className: 'entity-form-select',
+                value: selectedSheet,
+                onChange: (e) => setSelectedSheet(e.target.value),
+                style: {
+                  width: '100%',
+                  backgroundColor: '#0f172a',
+                  border: '1px solid #38BDF8',
+                  borderRadius: 8,
+                  padding: '9px 12px',
+                  color: '#F9FAFB',
+                  fontSize: '0.875rem'
+                }
+              },
+                availableSheets.map(s => React.createElement('option', { key: s, value: s }, s))
+              ),
+              React.createElement('div', { style: { fontSize: '0.75rem', color: '#94A3B8', marginTop: 5 } },
+                `Detected ${availableSheets.length} worksheets in workbook. Choose the primary table to import.`
               )
             ),
 
@@ -5584,6 +5668,30 @@ window.CANONICAL_PROJECTS = CANONICAL_PROJECTS;
       if (e && typeof e.preventDefault === 'function') e.preventDefault();
       if (!registerModelForm.model_name.trim()) return;
 
+      const targetDs = userDatasets[0] || null;
+      const availableRows = (targetDs && window._datasetRowsStore && window._datasetRowsStore[targetDs.id]) ||
+        overviewDatasetRows ||
+        (targetDs && window._datasetCache && window._datasetCache[targetDs.id]?.rows) ||
+        [];
+      const dsCols = targetDs && targetDs.columns ? targetDs.columns : [];
+
+      let computedMetrics = null;
+      let computedArtifact = null;
+      let computedFi = [];
+
+      if (availableRows.length >= 5) {
+        const trained = trainAndEvaluateRealModel(
+          availableRows,
+          dsCols,
+          registerModelForm.problem_type,
+          registerModelForm.algorithm,
+          registerModelForm.target_column || dsCols[0]?.column_name
+        );
+        computedMetrics = trained.metrics;
+        computedArtifact = trained.artifact;
+        computedFi = trained.feature_importance;
+      }
+
       const newModel = {
         id: `mod-${Date.now()}`,
         model_name: registerModelForm.model_name.trim(),
@@ -5592,29 +5700,46 @@ window.CANONICAL_PROJECTS = CANONICAL_PROJECTS;
         is_demo: false,
         problem_type: registerModelForm.problem_type,
         algorithm: registerModelForm.algorithm,
-        target_column: registerModelForm.target_column || 'target_variable',
+        target_column: registerModelForm.target_column || (dsCols[0]?.column_name || 'target_variable'),
         description: registerModelForm.description || 'Newly registered enterprise model pipeline.',
         status: registerModelForm.status || 'production',
         health_status: 'healthy',
         drift_status: 'Zero Drift Detected',
         drift_score: 0.005,
-        accuracy: '95.0%',
-        roc_auc: '0.965',
-        precision: '93.5%',
-        recall: '92.0%',
-        f1_score: '92.7%',
+        accuracy: computedMetrics ? computedMetrics.accuracy : null,
+        roc_auc: computedMetrics ? computedMetrics.roc_auc : null,
+        precision: computedMetrics ? computedMetrics.precision : null,
+        recall: computedMetrics ? computedMetrics.recall : null,
+        f1_score: computedMetrics ? computedMetrics.f1_score : null,
+        rmse: computedMetrics ? computedMetrics.rmse : null,
+        mae: computedMetrics ? computedMetrics.mae : null,
+        mape: computedMetrics ? computedMetrics.mape : null,
+        r2_score: computedMetrics ? computedMetrics.r2_score : null,
+        artifact: computedArtifact,
         updated_at: new Date().toISOString(),
         created_at: new Date().toISOString(),
         artifact_path: `s3://ml-artifacts/${registerModelForm.model_name.toLowerCase().replace(/\s+/g, '_')}_v${registerModelForm.version}.pkl`,
         dataset_name: userDatasets.length > 0 ? (userDatasets[0].name || userDatasets[0].original_filename) : 'sample_telemetry.csv',
         versions: [
-          { version: `v${registerModelForm.version || '1.0'}`, status: registerModelForm.status || 'production', date: 'Just now', metric: 'ROC-AUC: 0.965', artifact: `${registerModelForm.model_name.toLowerCase().replace(/\s+/g, '_')}.pkl`, accuracy: '95.0%', precision: '93.5%', recall: '92.0%', f1_score: '92.7%', latency: '15ms', drift_score: 0.005 }
+          {
+            version: `v${registerModelForm.version || '1.0'}`,
+            status: registerModelForm.status || 'production',
+            date: 'Just now',
+            metric: computedMetrics?.roc_auc ? `ROC-AUC: ${computedMetrics.roc_auc}` : (computedMetrics?.r2_score ? `R²: ${computedMetrics.r2_score}` : 'Pending'),
+            artifact: `${registerModelForm.model_name.toLowerCase().replace(/\s+/g, '_')}.pkl`,
+            accuracy: computedMetrics ? computedMetrics.accuracy : null,
+            precision: computedMetrics ? computedMetrics.precision : null,
+            recall: computedMetrics ? computedMetrics.recall : null,
+            f1_score: computedMetrics ? computedMetrics.f1_score : null,
+            rmse: computedMetrics ? computedMetrics.rmse : null,
+            r2_score: computedMetrics ? computedMetrics.r2_score : null,
+            latency: '15ms',
+            drift_score: 0.005
+          }
         ],
-        feature_importance: [
+        feature_importance: computedFi.length > 0 ? computedFi : [
           { name: 'primary_feature_signal', importance: 0.420, missing_pct: 0.0, drift_status: 'Healthy' },
-          { name: 'secondary_feature_signal', importance: 0.310, missing_pct: 0.0, drift_status: 'Healthy' },
-          { name: 'user_activity_score', importance: 0.170, missing_pct: 0.0, drift_status: 'Healthy' },
-          { name: 'telemetry_delta', importance: 0.100, missing_pct: 0.0, drift_status: 'Healthy' }
+          { name: 'secondary_feature_signal', importance: 0.310, missing_pct: 0.0, drift_status: 'Healthy' }
         ],
         training_job: {
           status: 'completed',
@@ -5985,7 +6110,24 @@ window.CANONICAL_PROJECTS = CANONICAL_PROJECTS;
         setUserModelsList(prev => {
           const updated = prev.map(m => {
             if (m.id === modelId) {
+              const targetDs = userDatasets.find(d => d.id === m.dataset_id || d.name === m.dataset_name) || userDatasets[0] || null;
+              const availableRows = (targetDs && window._datasetRowsStore && window._datasetRowsStore[targetDs.id]) ||
+                overviewDatasetRows ||
+                (targetDs && window._datasetCache && window._datasetCache[targetDs.id]?.rows) ||
+                [];
+              const dsCols = targetDs && targetDs.columns ? targetDs.columns : [];
+
+              const trained = trainAndEvaluateRealModel(
+                availableRows,
+                dsCols,
+                m.problem_type,
+                m.algorithm,
+                m.target_column || dsCols[0]?.column_name
+              );
+
+              const computedMetrics = trained.metrics;
               const isClassification = m.problem_type.includes('Classification');
+
               return {
                 ...m,
                 status: 'evaluated',
@@ -5993,23 +6135,28 @@ window.CANONICAL_PROJECTS = CANONICAL_PROJECTS;
                 drift_status: 'Zero Drift Detected',
                 drift_score: 0.004,
                 version: 'v1.0',
-                accuracy: isClassification ? '95.2%' : null,
-                roc_auc: isClassification ? '0.968' : null,
-                precision: isClassification ? '94.0%' : null,
-                recall: isClassification ? '93.5%' : null,
-                f1_score: isClassification ? '93.7%' : null,
-                mape: !isClassification ? '3.8%' : null,
-                rmse: !isClassification ? '92.40' : null,
-                r2_score: !isClassification ? '0.971' : null,
+                accuracy: computedMetrics.accuracy,
+                roc_auc: computedMetrics.roc_auc,
+                precision: computedMetrics.precision,
+                recall: computedMetrics.recall,
+                f1_score: computedMetrics.f1_score,
+                mape: computedMetrics.mape,
+                rmse: computedMetrics.rmse,
+                mae: computedMetrics.mae,
+                r2_score: computedMetrics.r2_score,
+                artifact: trained.artifact,
+                feature_importance: trained.feature_importance,
                 updated_at: new Date().toISOString(),
                 versions: [
                   {
                     version: 'v1.0',
                     status: 'evaluated',
                     date: 'Just now',
-                    metric: isClassification ? 'ROC-AUC: 0.968' : 'MAPE: 3.8%',
-                    accuracy: isClassification ? '95.2%' : null,
-                    f1_score: isClassification ? '93.7%' : null,
+                    metric: isClassification ? `ROC-AUC: ${computedMetrics.roc_auc || '0.500'}` : `RMSE: ${computedMetrics.rmse || '0.00'}`,
+                    accuracy: computedMetrics.accuracy,
+                    f1_score: computedMetrics.f1_score,
+                    rmse: computedMetrics.rmse,
+                    r2_score: computedMetrics.r2_score,
                     drift_score: 0.004
                   }
                 ],
@@ -6389,6 +6536,48 @@ window.CANONICAL_PROJECTS = CANONICAL_PROJECTS;
 
     /* ML Inference Execution Handler */
     const handleRunInference = () => {
+      const art = selectedModelDetails?.artifact;
+      const isReg = selectedModelDetails?.problem_type?.toLowerCase().includes('regress') || art?.type === 'regression_model';
+      
+      if (art && art.type === 'regression_model') {
+        const primFeat = art.primary_feature || 'feature';
+        const xVal = parseFloat(inferenceInputs[primFeat] ?? inferenceInputs.monthly_spend) || 0;
+        const pred = (art.intercept || 0) + (art.slope || 0) * xVal;
+        setInferenceResult({
+          is_regression: true,
+          target_name: selectedModelDetails.target_column || art.target_feature || 'Target Value',
+          predicted_value: pred.toFixed(2),
+          category: `Predicted: ${pred.toFixed(2)}`,
+          confidence: '100% (Linear Fit)',
+          latency: '6ms',
+          explanation: `Calculated from trained regression artifact: ŷ = ${(art.intercept || 0).toFixed(2)} + ${(art.slope || 0).toFixed(2)} × ${primFeat} (${xVal})`
+        });
+        return;
+      }
+
+      if (art && art.type === 'classification_model') {
+        const primFeat = art.primary_feature || 'feature';
+        const xVal = parseFloat(inferenceInputs[primFeat] ?? inferenceInputs.monthly_spend) || 0;
+        const thresh = art.threshold != null ? art.threshold : 0;
+        const isPos = xVal >= thresh;
+        const posClass = art.positive_class || 'Positive';
+        const negClass = (art.classes || []).find(c => c !== posClass) || 'Negative';
+        const category = isPos ? posClass : negClass;
+        const dist = Math.abs(xVal - thresh);
+        const prob = Math.min(0.999, Math.max(0.501, 1 / (1 + Math.exp(-dist / (Math.abs(thresh) || 1)))));
+        setInferenceResult({
+          is_regression: false,
+          risk_score: prob.toFixed(2),
+          risk_percentage: `${(prob * 100).toFixed(1)}%`,
+          category: category,
+          confidence: `${(prob * 100).toFixed(1)}%`,
+          latency: '8ms',
+          explanation: `Trained decision boundary: ${primFeat} = ${xVal} (threshold = ${thresh.toFixed(2)}) → Assigned ${category}`
+        });
+        return;
+      }
+
+      // Default demo telemetry classification calculation
       const spend = parseFloat(inferenceInputs.monthly_spend) || 250;
       const freq = parseFloat(inferenceInputs.session_frequency) || 18;
       const tickets = parseFloat(inferenceInputs.support_tickets) || 2;
@@ -6399,11 +6588,13 @@ window.CANONICAL_PROJECTS = CANONICAL_PROJECTS;
       const confidence = (85 + (risk * 12)).toFixed(1);
 
       setInferenceResult({
+        is_regression: false,
         risk_score: risk.toFixed(2),
         risk_percentage: `${(risk * 100).toFixed(1)}%`,
         category: category,
         confidence: `${confidence}%`,
-        latency: '12ms'
+        latency: '12ms',
+        explanation: `Telemetry logistic score: z = -0.5 + (${spend} × 0.002) - (${freq} × 0.08) + (${tickets} × 0.45) = ${z.toFixed(2)}`
       });
     };
 
@@ -7585,6 +7776,403 @@ window.CANONICAL_PROJECTS = CANONICAL_PROJECTS;
       window.addEventListener('keydown', handleKeyDown);
       return () => window.removeEventListener('keydown', handleKeyDown);
     }, [isDatasetExplorerOpen, handleCloseDatasetExplorer]);
+
+    /* Universal Data Understanding & Cleaning Engine State */
+    const [isCleaningStudioOpen, setIsCleaningStudioOpen] = React.useState(false);
+    const [cleaningStudioTab, setCleaningStudioTab] = React.useState('profile'); // 'profile' | 'operations'
+    const [confirmDestructiveClean, setConfirmDestructiveClean] = React.useState(false);
+    const [cleaningPlan, setCleaningPlan] = React.useState(null);
+    const [isCleaningLoading, setIsCleaningLoading] = React.useState(false);
+    const [cleaningSelectedOps, setCleaningSelectedOps] = React.useState(new Set());
+    const [cleaningOptions, setCleaningOptions] = React.useState({
+      missingStrategy: 'auto',
+      duplicateStrategy: 'keep_first',
+      outlierStrategy: 'winsorize',
+      harmonizeCategories: true,
+      normalizeColumnNames: true
+    });
+    const [cleaningResult, setCleaningResult] = React.useState(null);
+    const [isAiUnderstandOpen, setIsAiUnderstandOpen] = React.useState(false);
+    const [aiUnderstandData, setAiUnderstandData] = React.useState(null);
+    const [isAiUnderstandLoading, setIsAiUnderstandLoading] = React.useState(false);
+    const [isDocumentViewerOpen, setIsDocumentViewerOpen] = React.useState(false);
+    const [docViewerTab, setDocViewerTab] = React.useState('overview');
+    const [docSearchQuery, setDocSearchQuery] = React.useState('');
+    const [docSearchResults, setDocSearchResults] = React.useState([]);
+    const [isDocSearching, setIsDocSearching] = React.useState(false);
+    const [docQaQuestion, setDocQaQuestion] = React.useState('');
+    const [docQaAnswer, setDocQaAnswer] = React.useState(null);
+    const [isDocQaLoading, setIsDocQaLoading] = React.useState(false);
+    const [docCompareTargetId, setDocCompareTargetId] = React.useState('');
+    const [docCompareResult, setDocCompareResult] = React.useState(null);
+    const [isDocComparing, setIsDocComparing] = React.useState(false);
+
+    const handleOpenCleaningStudio = async (targetDsId) => {
+      const dsId = targetDsId || activeDatasetId;
+      const ds = userDatasets.find(d => d.id === dsId) || activeDatasetDetails?.dataset;
+      if (!ds) return;
+      const rows = window._datasetRowsStore?.[dsId] || activeDatasetDetails?.rawRows || [];
+      const cols = (activeDatasetDetails?.columns && activeDatasetDetails.columns.length > 0)
+        ? activeDatasetDetails.columns
+        : (ds.columns || []);
+      const headers = cols.map(c => c.column_name);
+
+      setIsCleaningStudioOpen(true);
+      setIsCleaningLoading(true);
+      setCleaningResult(null);
+      setCleaningStudioTab('profile');
+      setConfirmDestructiveClean(false);
+
+      try {
+        const res = await fetch('/api/data/clean/plan', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            headers,
+            rows: rows.slice(0, 10000),
+            tabularProfile: activeDatasetDetails?.deepProfile
+          })
+        });
+        const data = await res.json();
+        if (data.success && data.plan) {
+          const planObj = data.plan;
+          if (data.profile) planObj.profile = data.profile;
+          setCleaningPlan(planObj);
+          const allOpIds = (planObj.operations || []).map(o => o.id);
+          setCleaningSelectedOps(new Set(allOpIds));
+        } else {
+          throw new Error(data.error || 'Failed to generate cleaning plan');
+        }
+      } catch (err) {
+        console.warn('[Cleaning Plan Fallback]', err);
+        const fallbackOps = [];
+        cols.forEach((c, idx) => {
+          if ((c.null_percentage || 0) > 0) {
+            fallbackOps.push({
+              id: `op_missing_${idx}`,
+              type: 'missing_value_impute',
+              column: c.column_name,
+              reason: `Column contains ${c.null_percentage}% missing values`,
+              action: c.is_numeric ? 'Impute numeric median' : 'Impute frequent category mode',
+              severity: (c.null_percentage || 0) > 20 ? 'high' : 'medium',
+              affectedCount: Math.round(((c.null_percentage || 0) / 100) * (rows.length || 100))
+            });
+          }
+        });
+        const clientPlan = {
+          summary: {
+            totalProposedOperations: fallbackOps.length,
+            criticalFixesCount: fallbackOps.filter(o => o.severity === 'high').length,
+            qualityScoreProjected: 99.0
+          },
+          operations: fallbackOps,
+          dataQualitySnapshot: { rowCount: rows.length, columnCount: headers.length }
+        };
+        setCleaningPlan(clientPlan);
+        setCleaningSelectedOps(new Set(fallbackOps.map(o => o.id)));
+      } finally {
+        setIsCleaningLoading(false);
+      }
+    };
+
+    const handleExecuteCleaning = async () => {
+      if (!cleaningPlan) return;
+      const originalDs = userDatasets.find(d => d.id === activeDatasetId) || activeDatasetDetails?.dataset;
+      if (!originalDs) return;
+      const originalRows = window._datasetRowsStore?.[originalDs.id] || activeDatasetDetails?.rawRows || [];
+      const originalCols = (activeDatasetDetails?.columns && activeDatasetDetails.columns.length > 0)
+        ? activeDatasetDetails.columns
+        : (originalDs.columns || []);
+      const headers = originalCols.map(c => c.column_name);
+
+      setIsCleaningLoading(true);
+      try {
+        const approvedOps = (cleaningPlan.operations || []).filter(o => cleaningSelectedOps.has(o.id));
+        const res = await fetch('/api/data/clean/apply', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            headers,
+            rows: originalRows,
+            approvedOperations: approvedOps,
+            options: cleaningOptions
+          })
+        });
+        const data = await res.json();
+        if (!data.success) {
+          throw new Error(data.error || 'Failed to execute cleaning transformations');
+        }
+
+        setCleaningResult(data);
+
+        // Versioning: Non-destructive creation of v2 (Cleaned) while preserving v1 original
+        const newVersionId = `ds_clean_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+        const baseName = (originalDs.name || originalDs.original_filename || 'Dataset').replace(/\s*\(Cleaned.*?\)$/i, '');
+        const newVersionName = `${baseName} (Cleaned v2)`;
+        const cleanedRows = data.cleanedRows || originalRows;
+        const cleanedHeaders = data.cleanedHeaders || headers;
+
+        const newCols = cleanedHeaders.map((colName, idx) => {
+          const colRaw = cleanedRows.map(r => r[colName]);
+          const props = CanonicalTypeResolver.inferColumnProperties(colName, colRaw);
+          const nonNull = colRaw.filter(v => v !== '' && v !== null && v !== undefined);
+          const unique = new Set(nonNull.map(v => String(v)));
+          const nullPct = Number((((colRaw.length - nonNull.length) / Math.max(1, colRaw.length)) * 100).toFixed(2));
+          return {
+            id: `col_${newVersionId}_${idx}`,
+            dataset_id: newVersionId,
+            column_name: colName,
+            data_type: props.canonical_type,
+            canonical_type: props.canonical_type,
+            null_percentage: nullPct,
+            unique_values: unique.size,
+            sample_values: Array.from(unique).slice(0, 5),
+            is_numeric: props.is_numeric,
+            is_temporal: props.is_temporal,
+            is_identifier: props.is_identifier,
+            is_categorical: props.is_categorical
+          };
+        });
+
+        const newDatasetObj = {
+          id: newVersionId,
+          name: newVersionName,
+          description: `Cleaned version with ${data.summary?.totalTransformationsApplied || approvedOps.length} transformations applied. Original: ${originalDs.name || originalDs.original_filename}`,
+          projectId: originalDs.projectId || activeProjectId,
+          original_filename: originalDs.original_filename,
+          file_type: originalDs.file_type,
+          file_size: originalDs.file_size,
+          row_count: cleanedRows.length,
+          column_count: cleanedHeaders.length,
+          status: 'active',
+          created_at: new Date().toISOString(),
+          columns: newCols,
+          version: (originalDs.version || 1) + 1,
+          cleanedFromDatasetId: originalDs.id,
+          quarantinedCount: (data.quarantinedRows || []).length
+        };
+
+        window._datasetRowsStore[newVersionId] = cleanedRows;
+        preprocessDatasetRowsAndOptions(newVersionId, newCols, cleanedRows);
+        await InsightIQDB.saveRows(newVersionId, cleanedRows);
+
+        const newDetails = {
+          dataset: newDatasetObj,
+          columns: newCols,
+          statistics: {
+            total_rows: cleanedRows.length,
+            total_columns: cleanedHeaders.length,
+            numeric_columns: newCols.filter(c => c.is_numeric).length,
+            categorical_columns: newCols.filter(c => c.is_categorical).length,
+            datetime_columns: newCols.filter(c => c.is_temporal).length
+          },
+          quality: {
+            duplicate_rows: 0,
+            missing_values: 0,
+            quality_score: Math.min(100, (data.updatedProfile?.summary?.overallQualityScore || 99.4))
+          },
+          rawRows: cleanedRows,
+          capabilities: computeDatasetCapabilities(newDatasetObj, newCols, cleanedRows),
+          deepProfile: data.updatedProfile,
+          cleaningAuditLog: data.auditLog,
+          quarantinedRows: data.quarantinedRows
+        };
+
+        window._datasetCache[newVersionId] = { detailsObj: newDetails, timestamp: Date.now() };
+
+        if (data.quarantinedRows && data.quarantinedRows.length > 0 && supabaseClient && session?.user?.id) {
+          try {
+            await supabaseClient.from('dataset_quarantine_records').insert(
+              data.quarantinedRows.map(qr => ({
+                dataset_id: newVersionId,
+                original_dataset_id: originalDs.id,
+                row_index: qr.rowIndex,
+                reason: qr.reason,
+                raw_data: qr.row
+              }))
+            );
+          } catch (qErr) {
+            console.warn('[Quarantine DB Sync Warning]', qErr);
+          }
+        }
+
+        const updatedList = [newDatasetObj, ...userDatasets];
+        setUserDatasets(updatedList);
+        localStorage.setItem('insightiq_user_datasets', JSON.stringify(updatedList));
+        localStorage.setItem('insightiq_active_dataset_id', newVersionId);
+        setActiveDatasetId(newVersionId);
+        setAnalyticsSelectedDatasetId(newVersionId);
+        setSelectedDatasetDetails(newDetails);
+        setActiveDatasetDetails(newDetails);
+
+        console.log(`[Safe Cleaning] Successfully created ${newVersionName}. Original ${originalDs.id} preserved intact.`);
+      } catch (err) {
+        console.error('[Safe Cleaning Error]', err);
+        alert('Cleaning execution failed: ' + (err.message || 'Unknown error'));
+      } finally {
+        setIsCleaningLoading(false);
+      }
+    };
+
+    const handleRollbackDataset = (currentCleanedDsId) => {
+      const currentDs = userDatasets.find(d => d.id === currentCleanedDsId) || activeDatasetDetails?.dataset;
+      if (!currentDs || !currentDs.cleanedFromDatasetId) return;
+      const originalDs = userDatasets.find(d => d.id === currentDs.cleanedFromDatasetId);
+      if (!originalDs) {
+        alert('Original dataset version not found in workspace registry.');
+        return;
+      }
+      handleSwitchActiveDataset(originalDs.id);
+      console.log(`[Rollback] Reverted to original dataset: ${originalDs.name || originalDs.original_filename}`);
+    };
+
+    const handleOpenAiUnderstand = async (targetDsId) => {
+      const dsId = targetDsId || activeDatasetId;
+      const ds = userDatasets.find(d => d.id === dsId) || activeDatasetDetails?.dataset;
+      if (!ds) return;
+      setIsAiUnderstandOpen(true);
+      setIsAiUnderstandLoading(true);
+
+      try {
+        const cols = (activeDatasetDetails?.columns && activeDatasetDetails.columns.length > 0)
+          ? activeDatasetDetails.columns
+          : (ds.columns || []);
+        const res = await fetch('/api/data/ai/understand', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            tabularProfile: activeDatasetDetails?.deepProfile || {
+              summary: { rowCount: ds.row_count, columnCount: ds.column_count },
+              columns: cols.map(c => ({
+                name: c.column_name,
+                inferredType: c.canonical_type || c.data_type,
+                nullCount: Math.round(((c.null_percentage || 0) * (ds.row_count || 100)) / 100),
+                uniqueCount: c.unique_values || 5,
+                sampleValues: c.sample_values || []
+              }))
+            },
+            documentProfile: ds.documentProfile || null
+          })
+        });
+        const data = await res.json();
+        if (data.success && data.understanding) {
+          setAiUnderstandData(data.understanding);
+        } else {
+          throw new Error(data.error || 'Failed to infer semantic understanding');
+        }
+      } catch (err) {
+        console.warn('[AI Understand Fallback]', err);
+        const cols = activeDatasetDetails?.columns || ds.columns || [];
+        setAiUnderstandData({
+          datasetSummary: `Dataset contains ${ds.column_count || cols.length} attributes across ${ds.row_count || 0} records.`,
+          domainClassification: 'Enterprise Business Intelligence & Operations',
+          columnSemantics: cols.map(c => ({
+            column: c.column_name,
+            suggestedMeaning: `Telemetry measure for ${c.column_name}`,
+            businessEntity: c.is_identifier ? 'Identifier' : (c.is_numeric ? 'Metric' : 'Dimension'),
+            recommendedRule: 'Enforce formatting and range consistency'
+          })),
+          cleaningRecommendations: [
+            { type: 'missing_values', recommendation: 'Evaluate null distribution across non-identifier attributes' },
+            { type: 'type_consistency', recommendation: 'Standardize ISO date representations and numerical precision' }
+          ],
+          suggestedQuestions: [
+            'Which factors exert the highest influence on overall performance?',
+            'What temporal patterns emerge across periods?'
+          ]
+        });
+      } finally {
+        setIsAiUnderstandLoading(false);
+      }
+    };
+
+    const handleOpenDocumentViewer = (targetDsId) => {
+      setIsDocumentViewerOpen(true);
+      setDocViewerTab('overview');
+      setDocSearchResults([]);
+      setDocQaAnswer(null);
+      setDocCompareResult(null);
+    };
+
+    const handleSearchDocumentInViewer = async () => {
+      if (!docSearchQuery.trim()) return;
+      setIsDocSearching(true);
+      try {
+        const activeDoc = {
+          filename: activeDatasetDetails?.dataset?.name || 'document',
+          documentData: activeDatasetDetails?.documentData || { text: (activeDatasetDetails?.rawRows || []).map(r => r.content || '').join('\n') }
+        };
+        const res = await fetch('/api/document/search', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ query: docSearchQuery, documents: [activeDoc] })
+        });
+        const data = await res.json();
+        if (data.success) {
+          setDocSearchResults(data.results || []);
+        }
+      } catch (err) {
+        console.warn('[Doc Search Error]', err);
+      } finally {
+        setIsDocSearching(false);
+      }
+    };
+
+    const handleQaDocumentInViewer = async () => {
+      if (!docQaQuestion.trim()) return;
+      setIsDocQaLoading(true);
+      try {
+        const activeDoc = {
+          filename: activeDatasetDetails?.dataset?.name || 'document',
+          documentData: activeDatasetDetails?.documentData || { text: (activeDatasetDetails?.rawRows || []).map(r => r.content || '').join('\n') }
+        };
+        const res = await fetch('/api/document/qa', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ question: docQaQuestion, documents: [activeDoc] })
+        });
+        const data = await res.json();
+        if (data.success) {
+          setDocQaAnswer(data);
+        }
+      } catch (err) {
+        console.warn('[Doc QA Error]', err);
+      } finally {
+        setIsDocQaLoading(false);
+      }
+    };
+
+    const handleCompareDocumentInViewer = async (targetId) => {
+      if (!targetId) return;
+      setIsDocComparing(true);
+      try {
+        const activeDoc = {
+          filename: activeDatasetDetails?.dataset?.name || 'document_a',
+          documentData: activeDatasetDetails?.documentData || { text: (activeDatasetDetails?.rawRows || []).map(r => r.content || '').join('\n') },
+          profile: activeDatasetDetails?.deepProfile?.documentProfile || activeDatasetDetails?.deepProfile
+        };
+        const targetDs = userDatasets.find(d => d.id === targetId);
+        const targetDetails = window._datasetCache?.[targetId]?.detailsObj;
+        const targetDoc = {
+          filename: targetDs?.name || 'document_b',
+          documentData: targetDetails?.documentData || { text: (window._datasetRowsStore?.[targetId] || []).map(r => r.content || '').join('\n') },
+          profile: targetDetails?.deepProfile?.documentProfile || targetDetails?.deepProfile
+        };
+        const res = await fetch('/api/document/compare', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ docA: activeDoc, docB: targetDoc })
+        });
+        const data = await res.json();
+        if (data.success) {
+          setDocCompareResult(data.comparison);
+        }
+      } catch (err) {
+        console.warn('[Doc Compare Error]', err);
+      } finally {
+        setIsDocComparing(false);
+      }
+    };
 
     /* Real PDF Reports Management & Persistent Storage State */
     const [userReportsList, setUserReportsList] = React.useState(() => {
@@ -9485,7 +10073,16 @@ window.CANONICAL_PROJECTS = CANONICAL_PROJECTS;
       window.__insightIQTest.deleteReport = (r) => handleDeleteReport(r);
       window.__insightIQTest.REPORT_TYPE_PRESETS = REPORT_TYPE_PRESETS;
       window.__insightIQTest.AVAILABLE_REPORT_SECTIONS = AVAILABLE_REPORT_SECTIONS;
-    }, [generateReportForm, userReportsList, previewingReport]);
+      window.__insightIQTest.openCleaningStudio = () => handleOpenCleaningStudio(activeDatasetId);
+      window.__insightIQTest.closeCleaningStudio = () => setIsCleaningStudioOpen(false);
+      window.__insightIQTest.getCleaningPlan = () => cleaningPlan;
+      window.__insightIQTest.executeClean = handleExecuteCleaning;
+      window.__insightIQTest.rollbackDataset = handleRollbackDataset;
+      window.__insightIQTest.openAiUnderstand = () => handleOpenAiUnderstand(activeDatasetId);
+      window.__insightIQTest.getAiUnderstandData = () => aiUnderstandData;
+      window.__insightIQTest.openDocumentViewer = () => setIsDocumentViewerOpen(true);
+      window.__insightIQTest.processAndUploadDatasetFile = processAndUploadDatasetFile;
+    }, [generateReportForm, userReportsList, previewingReport, activeDatasetId, cleaningPlan, aiUnderstandData]);
 
     /* Unified Shared Dataset Upload Trigger Service */
     const handleTriggerUpload = (file = null) => {
@@ -9499,17 +10096,17 @@ window.CANONICAL_PROJECTS = CANONICAL_PROJECTS;
       handleNavigate('upload');
     };
 
-    /* Real Dataset Processing & Upload Pipeline Handler */
+    /* Universal Dataset Processing & Upload Pipeline Handler */
     const processAndUploadDatasetFile = async (file, meta = {}) => {
       if (!file) return;
 
-      console.log('[Upload] Upload started for:', file.name);
-      const ALLOWED_EXTENSIONS = ['csv', 'xls', 'xlsx'];
+      console.log('[Upload] Universal ingestion started for:', file.name);
+      const ALLOWED_EXTENSIONS = ['csv', 'tsv', 'xls', 'xlsx', 'json', 'jsonl', 'txt', 'md', 'log', 'pdf', 'docx'];
       const MAX_FILE_SIZE = 500 * 1024 * 1024; // 500 MB limit
 
-      const ext = file.name.split('.').pop()?.toLowerCase();
+      const ext = (file.name.split('.').pop() || '').toLowerCase();
       if (!ext || !ALLOWED_EXTENSIONS.includes(ext)) {
-        throw new Error(`Unsupported file format '.${ext}'. Allowed formats: CSV, XLS, XLSX.`);
+        throw new Error(`Unsupported file format '.${ext}'. Allowed formats: CSV, TSV, XLS, XLSX, JSON, JSONL, TXT, MD, LOG, PDF, DOCX.`);
       }
 
       if (file.size === 0) {
@@ -9520,7 +10117,7 @@ window.CANONICAL_PROJECTS = CANONICAL_PROJECTS;
         throw new Error(`File size (${(file.size / 1048576).toFixed(1)} MB) exceeds 500 MB limit.`);
       }
 
-      const fileType = ext === 'csv' ? 'CSV' : ext === 'xls' ? 'XLS' : 'XLSX';
+      const fileType = ext.toUpperCase();
       const datasetName = (meta && meta.name ? meta.name.trim() : '') || file.name.replace(/\.[^/.]+$/, '');
       const targetProjectId = meta && meta.projectId ? meta.projectId : activeProjectId;
       const datasetId = `ds_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
@@ -9529,33 +10126,103 @@ window.CANONICAL_PROJECTS = CANONICAL_PROJECTS;
       setUploadState({ stage: 'UPLOAD_STARTED', progress: 15, fileName: file.name, datasetId, error: null });
 
       try {
-        /* Step 1: Extract & Parse Data In-Memory Immediately */
+        /* Step 1: Universal Ingestion (Server Detector & Client Fallbacks) */
         let rows = [];
         let headers = [];
+        let documentData = null;
+        let isDocument = false;
+        let deepProfile = null;
 
-        const arrayBuffer = await file.arrayBuffer();
-        if (ext === 'csv') {
-          const text = new TextDecoder('utf-8', { fatal: false }).decode(arrayBuffer);
-          const parsed = parseCSV(text);
-          headers = parsed.headers;
-          rows = parsed.rows;
-        } else if (window.XLSX) {
-          const workbook = window.XLSX.read(arrayBuffer, { type: 'array' });
-          const sheetName = workbook.SheetNames[0];
-          const worksheet = workbook.Sheets[sheetName];
-          rows = window.XLSX.utils.sheet_to_json(worksheet, { defval: '' });
-          if (rows.length > 0) {
-            headers = Object.keys(rows[0]);
+        // Attempt server-side universal ingestion engine first
+        try {
+          const formData = new FormData();
+          formData.append('file', file);
+          if (meta?.sheetName) {
+            formData.append('sheetName', meta.sheetName);
           }
-        } else {
-          const text = new TextDecoder('utf-8', { fatal: false }).decode(arrayBuffer);
-          const parsed = parseCSV(text);
-          headers = parsed.headers;
-          rows = parsed.rows;
+          const apiRes = await fetch('/api/data/ingest', { method: 'POST', body: formData });
+          if (apiRes.ok) {
+            const apiJson = await apiRes.json();
+            if (apiJson.success && apiJson.ingestion) {
+              const ing = apiJson.ingestion;
+              deepProfile = apiJson.profile;
+              if (ing.category === 'tabular' && Array.isArray(ing.rows) && ing.rows.length > 0) {
+                headers = ing.headers || Object.keys(ing.rows[0]);
+                rows = ing.rows;
+              } else if (ing.category === 'document' || ing.document) {
+                isDocument = true;
+                documentData = ing.document || {};
+                if (Array.isArray(ing.rows) && ing.rows.length > 0) {
+                  headers = ing.headers || Object.keys(ing.rows[0]);
+                  rows = ing.rows;
+                } else {
+                  headers = ['section', 'content'];
+                  rows = (documentData.paragraphs || []).slice(0, 1000).map((p, idx) => ({
+                    section: `Section ${idx + 1}`,
+                    content: p
+                  }));
+                  if (rows.length === 0 && documentData.text) {
+                    rows = [{ section: 'Document Body', content: documentData.text.slice(0, 500) }];
+                  }
+                }
+              }
+            }
+          }
+        } catch (apiErr) {
+          console.warn('[Ingest API server notice: Using client parsing fallback]', apiErr);
+        }
+
+        // Reliable client-side fallback if server ingestion was bypassed or returned 0 rows
+        if (rows.length === 0) {
+          const arrayBuffer = await file.arrayBuffer();
+          const decoder = new TextDecoder('utf-8', { fatal: false });
+
+          if (['csv', 'tsv'].includes(ext)) {
+            const text = decoder.decode(arrayBuffer);
+            const delim = ext === 'tsv' ? '\t' : (text.includes('\t') && !text.includes(',') ? '\t' : (text.includes(';') && !text.includes(',') ? ';' : (text.includes('|') && !text.includes(',') ? '|' : ',')));
+            const parsed = parseCSV(text, delim);
+            headers = parsed.headers;
+            rows = parsed.rows;
+          } else if (['xls', 'xlsx'].includes(ext) && window.XLSX) {
+            const workbook = window.XLSX.read(arrayBuffer, { type: 'array' });
+            const sheetName = (meta?.sheetName && workbook.Sheets[meta.sheetName]) ? meta.sheetName : workbook.SheetNames[0];
+            const worksheet = workbook.Sheets[sheetName];
+            rows = window.XLSX.utils.sheet_to_json(worksheet, { defval: '' });
+            if (rows.length > 0) headers = Object.keys(rows[0]);
+          } else if (['json', 'jsonl'].includes(ext)) {
+            const text = decoder.decode(arrayBuffer);
+            if (ext === 'jsonl' || (text.trim().startsWith('{') && text.includes('\n{'))) {
+              rows = text.split('\n').map(l => l.trim()).filter(Boolean).map(l => {
+                try { return JSON.parse(l); } catch(e) { return null; }
+              }).filter(Boolean);
+            } else {
+              const parsed = JSON.parse(text);
+              rows = Array.isArray(parsed) ? parsed : (parsed.data || parsed.records || [parsed]);
+            }
+            if (rows.length > 0) headers = Object.keys(rows[0]);
+          } else if (['txt', 'md', 'log'].includes(ext)) {
+            const text = decoder.decode(arrayBuffer);
+            isDocument = true;
+            documentData = { text, wordCount: text.split(/\s+/).length, lineCount: text.split('\n').length };
+            headers = ['line_number', 'content'];
+            rows = text.split('\n').slice(0, 1000).map((line, idx) => ({
+              line_number: idx + 1,
+              content: line
+            }));
+          } else {
+            isDocument = true;
+            documentData = { text: `[${file.name}] Successfully uploaded.`, size: file.size };
+            headers = ['property', 'value'];
+            rows = [
+              { property: 'filename', value: file.name },
+              { property: 'file_type', value: ext.toUpperCase() },
+              { property: 'file_size', value: `${(file.size / 1024).toFixed(1)} KB` }
+            ];
+          }
         }
 
         if (rows.length === 0 || headers.length === 0) {
-          throw new Error('Unable to parse dataset file: File is empty or missing valid header columns.');
+          throw new Error('Unable to parse dataset file: File is empty or missing valid content.');
         }
 
         setUploadState({ stage: 'EXTRACTING_SCHEMA', progress: 50, fileName: file.name, datasetId });
@@ -9642,7 +10309,10 @@ window.CANONICAL_PROJECTS = CANONICAL_PROJECTS;
           column_count: totalColumns,
           status: 'active',
           created_at: new Date().toISOString(),
-          columns: profiledColumns
+          columns: profiledColumns,
+          isDocument,
+          documentData,
+          version: 1
         };
 
         const totalCells = Math.max(1, totalRows * totalColumns);
@@ -9683,7 +10353,9 @@ window.CANONICAL_PROJECTS = CANONICAL_PROJECTS;
             execution_time: Date.now() - startTime
           }],
           rawRows: rows,
-          capabilities
+          capabilities,
+          deepProfile,
+          documentData
         };
 
         window._datasetCache[datasetId] = { detailsObj, timestamp: Date.now() };
@@ -12362,7 +13034,13 @@ if (session && userProfile && needsRoleSelection) {
         const payload = {
           message: query,
           conversationHistory: historyWindow,
-          datasetContext: datasetContext,
+          datasetContext: {
+            ...datasetContext,
+            id: overviewSelectedDs?.id || 'active-ds',
+            name: overviewSelectedDs?.name || 'ActiveDataset',
+            columns: overviewCols || [],
+            rawRows: (activeRows && activeRows.length > 0 ? activeRows : overviewRawRows || []).slice(0, 500)
+          },
           analyticalFacts: analyticalResult?.facts || null
         };
 
@@ -12399,7 +13077,11 @@ if (session && userProfile && needsRoleSelection) {
               sender: 'ai',
               text: resp.response,
               timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-              facts: analyticalResult?.facts
+              facts: resp.facts || analyticalResult?.facts,
+              citations: resp.citations || [],
+              discrepancies: resp.discrepancies || [],
+              visual: resp.visual || null,
+              plan: resp.plan || null
             };
             setCopilotMessages(prev => [...prev, aiMsg]);
           } else if (errRes && errRes.errorType === 'QUOTA_EXHAUSTED') {
@@ -12894,7 +13576,7 @@ if (session && userProfile && needsRoleSelection) {
             React.createElement('input', {
               ref: fileInputRef,
               type: 'file',
-              accept: '.csv,.xls,.xlsx,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+              accept: '.csv,.tsv,.xls,.xlsx,.json,.jsonl,.txt,.md,.log,.pdf,.docx,text/csv,text/tab-separated-values,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/json,text/plain,text/markdown,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document',
               style: { display: 'none' },
               onChange: (e) => {
                 const file = e.target.files?.[0];
@@ -12902,9 +13584,9 @@ if (session && userProfile && needsRoleSelection) {
                   console.log('[Upload] File selected:', file.name);
                   console.log('[Upload] Validation started');
                   const ext = (file.name.split('.').pop() || '').toLowerCase();
-                  if (!['csv', 'xlsx', 'xls'].includes(ext)) {
+                  if (!['csv', 'tsv', 'xlsx', 'xls', 'json', 'jsonl', 'txt', 'md', 'log', 'pdf', 'docx'].includes(ext)) {
                     console.error('[Upload] ERROR: Unsupported file format');
-                    alert('Unsupported file type. Please upload a CSV, XLSX, or XLS spreadsheet file.');
+                    alert('Unsupported file type. Please upload a supported dataset (CSV, TSV, XLSX, XLS, JSON, JSONL, TXT, MD, LOG, PDF, DOCX).');
                     e.target.value = '';
                     return;
                   }
@@ -20945,7 +21627,7 @@ if (session && userProfile && needsRoleSelection) {
                       React.createElement('input', {
                         ref: fileInputRef,
                         type: 'file',
-                        accept: '.csv,.xls,.xlsx',
+                        accept: '.csv,.tsv,.xls,.xlsx,.json,.jsonl,.txt,.md,.log,.pdf,.docx',
                         style: { display: 'none' },
                         onChange: (e) => {
                           const file = e.target.files?.[0];
@@ -21306,7 +21988,20 @@ if (session && userProfile && needsRoleSelection) {
                                     whiteSpace: 'pre-wrap',
                                     boxShadow: isUser ? '0 4px 14px rgba(124, 58, 237, 0.3)' : '0 2px 8px rgba(0,0,0,0.2)'
                                   }
-                                }, m.text),
+                                },
+                                  m.text,
+                                  !isUser && m.discrepancies && m.discrepancies.length > 0 && React.createElement('div', {
+                                    style: { marginTop: 12, padding: 10, borderRadius: 8, backgroundColor: 'rgba(239, 68, 68, 0.15)', border: '1px solid rgba(239, 68, 68, 0.3)' }
+                                  },
+                                    React.createElement('div', { style: { fontWeight: 700, fontSize: '0.75rem', color: '#F87171', marginBottom: 4 } }, '⚠️ Policy & Contract Discrepancies Detected:'),
+                                    m.discrepancies.map((d, i) => React.createElement('div', { key: i, style: { fontSize: '0.78rem', color: '#FCA5A5', marginBottom: 2 } },
+                                      `• ${d.entity} (${d.metric}): Measured ${d.tabularMeasured}% vs Policy ${d.documentPolicyLimit}% (${d.citation})`
+                                    ))
+                                  ),
+                                  !isUser && m.citations && m.citations.length > 0 && React.createElement('div', { style: { marginTop: 10, display: 'flex', flexWrap: 'wrap', gap: 6 } },
+                                    m.citations.map((c, i) => React.createElement('span', { key: i, className: 'badge badge-purple', style: { fontSize: '0.7rem' } }, c))
+                                  )
+                                ),
 
                                 React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 12, marginTop: 4, fontSize: '0.72rem', color: 'var(--text-tertiary)' } },
                                   React.createElement('span', null, m.timestamp || 'Just now'),
@@ -21841,6 +22536,36 @@ if (session && userProfile && needsRoleSelection) {
                             ))
                           )
                         ),
+                        React.createElement('button', {
+                          type: 'button',
+                          className: 'btn-secondary-action',
+                          style: { height: 40, padding: '0 14px', borderRadius: '12px', display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: '0.84375rem', fontWeight: 600, color: '#38BDF8', borderColor: 'rgba(56, 189, 248, 0.4)' },
+                          onClick: () => handleOpenCleaningStudio(selectedDs?.id)
+                        }, '🧹 Safe Cleaning Studio'),
+                        React.createElement('button', {
+                          type: 'button',
+                          className: 'btn-secondary-action',
+                          style: { height: 40, padding: '0 14px', borderRadius: '12px', display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: '0.84375rem', fontWeight: 600, color: '#A78BFA', borderColor: 'rgba(167, 139, 250, 0.4)' },
+                          onClick: () => handleOpenAiUnderstand(selectedDs?.id)
+                        }, '🤖 AI Understanding'),
+                        (selectedDs?.isDocument || selectedDs?.documentData || ['pdf', 'docx', 'txt', 'md', 'log'].includes((selectedDs?.file_type || '').toLowerCase())) && React.createElement('button', {
+                          type: 'button',
+                          className: 'btn-secondary-action',
+                          style: { height: 40, padding: '0 14px', borderRadius: '12px', display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: '0.84375rem', fontWeight: 600, color: '#34D399', borderColor: 'rgba(52, 211, 153, 0.4)' },
+                          onClick: () => handleOpenDocumentViewer(selectedDs?.id)
+                        }, '📄 Document & Facts'),
+                        selectedDs?.cleanedFromDatasetId && React.createElement('button', {
+                          type: 'button',
+                          className: 'btn-secondary-action',
+                          style: { height: 40, padding: '0 14px', borderRadius: '12px', display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: '0.84375rem', fontWeight: 600, color: '#FBBF24', borderColor: 'rgba(251, 191, 36, 0.4)' },
+                          onClick: () => handleRollbackDataset(selectedDs.id)
+                        }, '⏪ Rollback to v1 (Original)'),
+                        React.createElement('button', {
+                          type: 'button',
+                          className: 'btn-secondary-action',
+                          style: { height: 40, padding: '0 14px', borderRadius: '12px', display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: '0.84375rem', fontWeight: 600 },
+                          onClick: () => { setSelectedDatasetDetails(activeDatasetDetails); setIsDatasetExplorerOpen(true); }
+                        }, '🔍 Deep Explorer'),
                         React.createElement('button', {
                           className: 'btn-primary-action',
                           style: { padding: '10px 20px', fontSize: '0.9375rem' },
@@ -23639,6 +24364,21 @@ if (session && userProfile && needsRoleSelection) {
                             /* Interactive Inference Form */
                             React.createElement('div', { className: 'card', style: { padding: 18, marginBottom: 20 } },
                               React.createElement('h4', { className: 'font-title', style: { marginBottom: 14 } }, 'Run Interactive Model Inference'),
+                              selectedModelDetails.artifact?.primary_feature &&
+                              !['monthly_spend', 'session_frequency', 'support_tickets'].includes(selectedModelDetails.artifact.primary_feature) &&
+                              React.createElement('div', { style: { marginBottom: 14, padding: 12, backgroundColor: 'rgba(56, 189, 248, 0.08)', borderRadius: 6, border: '1px solid rgba(56, 189, 248, 0.25)' } },
+                                React.createElement('label', { className: 'auth-input-label', style: { color: '#38BDF8', fontWeight: 600 } },
+                                  `Model Primary Feature: ${selectedModelDetails.artifact.primary_feature}`
+                                ),
+                                React.createElement('input', {
+                                  type: 'number',
+                                  className: 'catalog-search-input',
+                                  style: { marginTop: 6, width: '100%' },
+                                  placeholder: `Input numeric value for ${selectedModelDetails.artifact.primary_feature}...`,
+                                  value: inferenceInputs[selectedModelDetails.artifact.primary_feature] ?? '',
+                                  onChange: (e) => setInferenceInputs(prev => ({ ...prev, [selectedModelDetails.artifact.primary_feature]: e.target.value }))
+                                })
+                              ),
                               React.createElement('div', { className: 'grid-12', style: { gap: 12, marginBottom: 14 } },
                                 React.createElement('div', { className: 'col-3' },
                                   React.createElement('label', { className: 'auth-input-label' }, 'Monthly Spend ($)'),
@@ -23689,8 +24429,13 @@ if (session && userProfile && needsRoleSelection) {
                               /* Inference Output Box */
                               inferenceResult && React.createElement('div', { style: { marginTop: 16, padding: 14, backgroundColor: 'rgba(56, 189, 248, 0.05)', border: '1px solid rgba(56, 189, 248, 0.25)', borderRadius: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' } },
                                 React.createElement('div', null,
-                                  React.createElement('div', { className: 'font-caption', style: { color: 'var(--text-secondary)' } }, 'Predicted Churn Risk'),
-                                  React.createElement('div', { className: 'font-display', style: { fontSize: '1.25rem', color: inferenceResult.category === 'High Risk' ? '#F87171' : '#34D399', marginTop: 2 } }, `${inferenceResult.category} (${inferenceResult.risk_percentage})`)
+                                  React.createElement('div', { className: 'font-caption', style: { color: 'var(--text-secondary)' } }, inferenceResult.is_regression ? `Predicted ${inferenceResult.target_name || 'Metric'}` : 'Predicted Classification / Churn Risk'),
+                                  React.createElement('div', { className: 'font-display', style: { fontSize: '1.25rem', color: inferenceResult.is_regression ? '#38BDF8' : (inferenceResult.category === 'High Risk' ? '#F87171' : '#34D399'), marginTop: 2 } },
+                                    inferenceResult.is_regression
+                                      ? `${inferenceResult.predicted_value}`
+                                      : `${inferenceResult.category} (${inferenceResult.risk_percentage || inferenceResult.confidence})`
+                                  ),
+                                  inferenceResult.explanation && React.createElement('div', { style: { fontSize: '0.75rem', color: 'var(--text-tertiary)', marginTop: 4, fontFamily: 'var(--font-mono)' } }, inferenceResult.explanation)
                                 ),
                                 React.createElement('div', { style: { textAlign: 'right' } },
                                   React.createElement('div', { className: 'font-caption', style: { color: 'var(--text-secondary)' } }, 'Model Confidence & Latency'),
@@ -25406,11 +26151,31 @@ if (session && userProfile && needsRoleSelection) {
                                 React.createElement('th', { style: { textAlign: 'left' } }, rowCol.column_name),
                                 numericCols.map((colCol, cIdx) => {
                                   const isDiag = rIdx === cIdx;
-                                  const coeff = isDiag ? 1.00 : parseFloat((0.45 + (rIdx * 0.15) - (cIdx * 0.12)).toFixed(2));
+                                  let coeff = isDiag ? 1.00 : 0.00;
+                                  if (!isDiag) {
+                                    const pair = (correlationPairs || []).find(p =>
+                                      (p.col1 === rowCol.column_name && p.col2 === colCol.column_name) ||
+                                      (p.col1 === colCol.column_name && p.col2 === rowCol.column_name)
+                                    );
+                                    if (pair && pair.r !== undefined && !isNaN(pair.r)) {
+                                      coeff = pair.r;
+                                    } else if (activeRawRows && activeRawRows.length >= 2) {
+                                      const parseNum = (v) => {
+                                        const s = String(v == null ? '' : v).trim().replace(/^[\$€£¥\s]+/, '').replace(/,/g, '');
+                                        const n = parseFloat(s);
+                                        return isNaN(n) ? null : n;
+                                      };
+                                      const pairs = activeRawRows.map(row => ({
+                                        x: parseNum(row[rowCol.column_name]),
+                                        y: parseNum(row[colCol.column_name])
+                                      })).filter(p => p.x !== null && p.y !== null);
+                                      coeff = pairs.length >= 2 ? computePearson(pairs.map(p => p.x), pairs.map(p => p.y)) : 0;
+                                    }
+                                  }
                                   const absVal = Math.abs(coeff);
                                   const bg = isDiag ? 'rgba(56,189,248,0.25)' : coeff > 0 ? `rgba(56,189,248,${absVal * 0.4})` : `rgba(248,113,113,${absVal * 0.4})`;
                                   const textColor = coeff > 0 ? '#38BDF8' : '#F87171';
-                                  return React.createElement('td', { key: colCol.column_name, style: { backgroundColor: bg } },
+                                  return React.createElement('td', { key: colCol.column_name, style: { backgroundColor: bg }, title: `${rowCol.column_name} vs ${colCol.column_name}: r = ${coeff.toFixed(4)}` },
                                     React.createElement('span', { className: 'corr-cell-value', style: { color: isDiag ? '#FFFFFF' : textColor } },
                                       coeff.toFixed(2)
                                     )
@@ -27050,7 +27815,765 @@ if (session && userProfile && needsRoleSelection) {
                   datasets: userDatasets,
                   onCreateModelSubmit: handleCreateModelSubmit,
                   onUploadDatasetInline: () => setIsUploadModalOpen(true)
-                })
+                }),
+
+                /* Universal Data Understanding, Cleaning Studio & Document Viewer Modals */
+                isCleaningStudioOpen && React.createElement('div', { className: 'upload-modal-overlay animate-fade-in' },
+                  React.createElement('div', { className: 'upload-modal-card', style: { maxWidth: 780, maxHeight: '90vh', display: 'flex', flexDirection: 'column' } },
+                    React.createElement('div', { className: 'modal-header-row' },
+                      React.createElement('div', null,
+                        React.createElement('div', { style: { fontSize: '0.75rem', fontWeight: 700, color: '#38BDF8', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 2 } }, 'SAFE DATA CLEANING STUDIO'),
+                        React.createElement('h3', { className: 'modal-title', style: { margin: 0 } }, 'Interactive Cleaning Plan'),
+                        React.createElement('p', { className: 'modal-subtitle', style: { margin: '2px 0 0 0' } }, 'Non-destructive pipeline: Original raw dataset v1 is preserved; a validated v2 is created.')
+                      ),
+                      React.createElement('button', {
+                        className: 'btn-icon-close',
+                        onClick: () => setIsCleaningStudioOpen(false)
+                      }, '✕')
+                    ),
+
+                    React.createElement('div', { style: { overflowY: 'auto', padding: '16px 2px', flex: 1 } },
+                      isCleaningLoading && React.createElement('div', { style: { padding: '48px 0', textAlign: 'center' } },
+                        React.createElement('div', { className: 'spinner', style: { width: 36, height: 36, border: '3px solid rgba(56, 189, 248, 0.2)', borderTopColor: '#38BDF8', borderRadius: '50%', animation: 'spin 1s linear infinite', margin: '0 auto 16px' } }),
+                        React.createElement('h4', { style: { color: '#FFF', margin: '0 0 8px 0' } }, 'Analyzing Anomalies & Generating Explainable Plan...'),
+                        React.createElement('p', { style: { color: '#9CA3AF', fontSize: '0.84375rem', margin: 0 } }, 'Scanning missing values, whitespaces, IQR outliers, and category typos.')
+                      ),
+
+                      !isCleaningLoading && cleaningResult && React.createElement('div', { style: { padding: 16 } },
+                        React.createElement('div', { style: { padding: 20, borderRadius: 12, backgroundColor: 'rgba(52, 211, 153, 0.1)', border: '1px solid rgba(52, 211, 153, 0.3)', marginBottom: 20 } },
+                          React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 10, color: '#34D399', fontWeight: 700, fontSize: '1.1rem', marginBottom: 6 } },
+                            '✓ Safe Cleaning Completed Successfully'
+                          ),
+                          React.createElement('p', { style: { color: '#E2E8F0', fontSize: '0.875rem', margin: 0, lineHeight: 1.5 } },
+                            `Successfully created version v2. Original raw dataset v1 remains completely untouched in storage. Applied ${cleaningResult.summary?.totalTransformationsApplied || 0} transformations; ${cleaningResult.quarantinedRows?.length || 0} records quarantined.`
+                          )
+                        ),
+                        React.createElement('div', { style: { display: 'flex', gap: 12, justifyContent: 'flex-end' } },
+                          React.createElement('button', {
+                            type: 'button',
+                            className: 'btn-secondary-action',
+                            onClick: () => setIsCleaningStudioOpen(false)
+                          }, 'Close Studio'),
+                          React.createElement('button', {
+                            type: 'button',
+                            className: 'btn-primary-action',
+                            onClick: () => {
+                              setIsCleaningStudioOpen(false);
+                              handleNavigate('analytics');
+                            }
+                          }, 'Analyze Cleaned Dataset →')
+                        )
+                      ),
+
+                      !isCleaningLoading && !cleaningResult && cleaningPlan && React.createElement(React.Fragment, null,
+                        /* Tab Switcher: Profiling vs Operations */
+                        React.createElement('div', {
+                          style: {
+                            display: 'flex',
+                            gap: 10,
+                            marginBottom: 16,
+                            borderBottom: '1px solid rgba(255,255,255,0.08)',
+                            paddingBottom: 10
+                          }
+                        },
+                          React.createElement('button', {
+                            type: 'button',
+                            className: cleaningStudioTab === 'profile' ? 'btn-primary-action' : 'btn-secondary-action',
+                            style: { padding: '6px 14px', fontSize: '0.8125rem' },
+                            onClick: () => setCleaningStudioTab('profile')
+                          }, '📊 1. Data Quality Assessment Report'),
+                          React.createElement('button', {
+                            type: 'button',
+                            className: cleaningStudioTab === 'operations' ? 'btn-primary-action' : 'btn-secondary-action',
+                            style: { padding: '6px 14px', fontSize: '0.8125rem' },
+                            onClick: () => setCleaningStudioTab('operations')
+                          }, `🧹 2. Proposed Cleaning Operations (${(cleaningPlan.operations || []).length})`)
+                        ),
+
+                        /* Tab 1: Data Quality Profiling Assessment Report */
+                        cleaningStudioTab === 'profile' && React.createElement('div', { className: 'animate-fade-in' },
+                          React.createElement('div', {
+                            className: 'dense-grid-3',
+                            style: { gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, marginBottom: 16 }
+                          },
+                            React.createElement('div', { className: 'kpi-card-v2', style: { padding: 12 } },
+                              React.createElement('div', { className: 'kpi-title-v2', style: { fontSize: '0.6875rem' } }, 'QUALITY SCORE'),
+                              React.createElement('div', { className: 'kpi-value-v2', style: { fontSize: '1.25rem', color: '#34D399' } },
+                                `${cleaningPlan.profile?.qualityScore || cleaningPlan.dataQualitySnapshot?.qualityScore || 90}%`
+                              )
+                            ),
+                            React.createElement('div', { className: 'kpi-card-v2', style: { padding: 12 } },
+                              React.createElement('div', { className: 'kpi-title-v2', style: { fontSize: '0.6875rem' } }, 'DIMENSIONS'),
+                              React.createElement('div', { className: 'kpi-value-v2', style: { fontSize: '1.125rem', color: '#38BDF8' } },
+                                `${(cleaningPlan.profile?.rowCount || cleaningPlan.dataQualitySnapshot?.rowCount || 0).toLocaleString()} × ${(cleaningPlan.profile?.columnCount || cleaningPlan.dataQualitySnapshot?.columnCount || 0)}`
+                              )
+                            ),
+                            React.createElement('div', { className: 'kpi-card-v2', style: { padding: 12 } },
+                              React.createElement('div', { className: 'kpi-title-v2', style: { fontSize: '0.6875rem' } }, 'MISSING CELLS'),
+                              React.createElement('div', { className: 'kpi-value-v2', style: { fontSize: '1.25rem', color: (cleaningPlan.profile?.summary?.missingCells || 0) > 0 ? '#F87171' : '#9CA3AF' } },
+                                `${(cleaningPlan.profile?.summary?.missingCells || cleaningPlan.dataQualitySnapshot?.missingCellsCount || 0).toLocaleString()} (${cleaningPlan.profile?.summary?.missingPercentage || 0}%)`
+                              )
+                            ),
+                            React.createElement('div', { className: 'kpi-card-v2', style: { padding: 12 } },
+                              React.createElement('div', { className: 'kpi-title-v2', style: { fontSize: '0.6875rem' } }, 'DUPLICATE ROWS'),
+                              React.createElement('div', { className: 'kpi-value-v2', style: { fontSize: '1.25rem', color: (cleaningPlan.profile?.duplicateRows?.count || 0) > 0 ? '#F59E0B' : '#9CA3AF' } },
+                                `${(cleaningPlan.profile?.duplicateRows?.count || 0).toLocaleString()} (${cleaningPlan.profile?.duplicateRows?.percentage || 0}%)`
+                              )
+                            )
+                          ),
+
+                          /* Column Hygiene & Type Inference Table */
+                          React.createElement('div', {
+                            style: {
+                              borderRadius: 10,
+                              backgroundColor: 'rgba(255,255,255,0.02)',
+                              border: '1px solid rgba(255,255,255,0.08)',
+                              overflow: 'hidden',
+                              marginBottom: 16
+                            }
+                          },
+                            React.createElement('div', {
+                              style: {
+                                padding: '10px 14px',
+                                borderBottom: '1px solid rgba(255,255,255,0.08)',
+                                fontSize: '0.75rem',
+                                fontWeight: 700,
+                                color: '#9CA3AF',
+                                textTransform: 'uppercase'
+                              }
+                            }, 'Column Schema, Type Confidence & Quality Breakdown'),
+                            React.createElement('div', { style: { maxHeight: 220, overflowY: 'auto' } },
+                              React.createElement('table', { style: { width: '100%', borderCollapse: 'collapse', fontSize: '0.8125rem' } },
+                                React.createElement('thead', null,
+                                  React.createElement('tr', { style: { borderBottom: '1px solid rgba(255,255,255,0.06)', color: '#94A3B8', textAlign: 'left' } },
+                                    React.createElement('th', { style: { padding: '8px 12px', fontWeight: 600 } }, 'Column'),
+                                    React.createElement('th', { style: { padding: '8px 12px', fontWeight: 600 } }, 'Inferred Type'),
+                                    React.createElement('th', { style: { padding: '8px 12px', fontWeight: 600 } }, 'Confidence'),
+                                    React.createElement('th', { style: { padding: '8px 12px', fontWeight: 600 } }, 'Null Rate'),
+                                    React.createElement('th', { style: { padding: '8px 12px', fontWeight: 600 } }, 'Unique'),
+                                    React.createElement('th', { style: { padding: '8px 12px', fontWeight: 600 } }, 'Outliers / Flags')
+                                  )
+                                ),
+                                React.createElement('tbody', null,
+                                  ((cleaningPlan.profile?.columns) || (activeDatasetDetails?.columns) || []).map((col, cIdx) => {
+                                    const colName = col.columnName || col.column_name || `Col ${cIdx + 1}`;
+                                    const infType = col.inferredType || col.canonical_type || 'string';
+                                    const conf = col.typeConfidence !== undefined ? `${col.typeConfidence}%` : (col.confidence ? `${col.confidence}%` : '95%');
+                                    const nullPct = col.missingPercentage !== undefined ? `${col.missingPercentage}%` : `${col.null_percentage || 0}%`;
+                                    const uniq = col.uniqueCount !== undefined ? col.uniqueCount : (col.unique_values || '—');
+                                    const outlierCnt = col.outliers?.iqrOutliersCount || 0;
+                                    const flags = [];
+                                    if (outlierCnt > 0) flags.push(`${outlierCnt} IQR Outliers`);
+                                    if (col.invalidDateCount > 0) flags.push(`${col.invalidDateCount} Ambiguous Dates`);
+                                    if (col.mixedTypes?.length > 0) flags.push('Mixed Types');
+
+                                    return React.createElement('tr', {
+                                      key: colName,
+                                      style: { borderBottom: '1px solid rgba(255,255,255,0.04)', color: '#E2E8F0' }
+                                    },
+                                      React.createElement('td', { style: { padding: '8px 12px', fontWeight: 600, color: '#FFF' } }, colName),
+                                      React.createElement('td', { style: { padding: '8px 12px' } },
+                                        React.createElement('span', { className: 'badge badge-purple', style: { fontSize: '0.65rem' } }, infType)
+                                      ),
+                                      React.createElement('td', { style: { padding: '8px 12px', color: '#38BDF8' } }, conf),
+                                      React.createElement('td', { style: { padding: '8px 12px', color: parseFloat(nullPct) > 0 ? '#F87171' : '#94A3B8' } }, nullPct),
+                                      React.createElement('td', { style: { padding: '8px 12px', color: '#94A3B8' } }, uniq),
+                                      React.createElement('td', { style: { padding: '8px 12px' } },
+                                        flags.length > 0
+                                          ? React.createElement('span', { style: { color: '#F59E0B', fontSize: '0.75rem', fontWeight: 600 } }, flags.join(', '))
+                                          : React.createElement('span', { style: { color: '#34D399', fontSize: '0.75rem' } }, 'Clean')
+                                      )
+                                    );
+                                  })
+                                )
+                              )
+                            )
+                          ),
+
+                          /* Action bar to advance to operations */
+                          React.createElement('div', { style: { display: 'flex', justifyContent: 'flex-end', marginTop: 12 } },
+                            React.createElement('button', {
+                              type: 'button',
+                              className: 'btn-primary-action',
+                              onClick: () => setCleaningStudioTab('operations')
+                            }, `Review Proposed Cleaning Plan (${(cleaningPlan.operations || []).length} Operations) →`)
+                          )
+                        ),
+
+                        /* Tab 2: Proposed Cleaning Operations */
+                        cleaningStudioTab === 'operations' && React.createElement('div', { className: 'animate-fade-in' },
+                          React.createElement('div', { className: 'dense-grid-3', style: { marginBottom: 18 } },
+                            React.createElement('div', { className: 'kpi-card-v2', style: { padding: 12 } },
+                              React.createElement('div', { className: 'kpi-title-v2', style: { fontSize: '0.7rem' } }, 'PROPOSED OPERATIONS'),
+                              React.createElement('div', { className: 'kpi-value-v2', style: { fontSize: '1.3rem', color: '#38BDF8' } }, (cleaningPlan.operations || []).length)
+                            ),
+                            React.createElement('div', { className: 'kpi-card-v2', style: { padding: 12 } },
+                              React.createElement('div', { className: 'kpi-title-v2', style: { fontSize: '0.7rem' } }, 'CRITICAL FIXES'),
+                              React.createElement('div', { className: 'kpi-value-v2', style: { fontSize: '1.3rem', color: '#F87171' } }, cleaningPlan.summary?.criticalFixesCount || 0)
+                            ),
+                            React.createElement('div', { className: 'kpi-card-v2', style: { padding: 12 } },
+                              React.createElement('div', { className: 'kpi-title-v2', style: { fontSize: '0.7rem' } }, 'PROJECTED QUALITY'),
+                              React.createElement('div', { className: 'kpi-value-v2', style: { fontSize: '1.3rem', color: '#34D399' } }, `${cleaningPlan.summary?.qualityScoreProjected || 99}%`)
+                            )
+                          ),
+
+                          React.createElement('div', { style: { padding: 14, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', marginBottom: 18 } },
+                            React.createElement('div', { style: { fontSize: '0.75rem', fontWeight: 700, color: '#9CA3AF', textTransform: 'uppercase', marginBottom: 10 } }, 'CLEANING CONFIGURATION STRATEGY'),
+                            React.createElement('div', { style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 } },
+                              React.createElement('div', null,
+                                React.createElement('label', { style: { fontSize: '0.75rem', color: '#CBD5E1', display: 'block', marginBottom: 4 } }, 'Missing Value Strategy:'),
+                                React.createElement('select', {
+                                  className: 'auth-input-control',
+                                  style: { padding: '7px 10px', fontSize: '0.8125rem' },
+                                  value: cleaningOptions.missingStrategy,
+                                  onChange: (e) => setCleaningOptions({ ...cleaningOptions, missingStrategy: e.target.value })
+                                },
+                                  React.createElement('option', { value: 'auto' }, 'Auto (Median for numeric, Mode for text)'),
+                                  React.createElement('option', { value: 'quarantine' }, 'Quarantine rows with missing values'),
+                                  React.createElement('option', { value: 'drop' }, 'Drop rows with missing values')
+                                )
+                              ),
+                              React.createElement('div', null,
+                                React.createElement('label', { style: { fontSize: '0.75rem', color: '#CBD5E1', display: 'block', marginBottom: 4 } }, 'Outlier Handling (1.5x IQR):'),
+                                React.createElement('select', {
+                                  className: 'auth-input-control',
+                                  style: { padding: '7px 10px', fontSize: '0.8125rem' },
+                                  value: cleaningOptions.outlierStrategy,
+                                  onChange: (e) => setCleaningOptions({ ...cleaningOptions, outlierStrategy: e.target.value })
+                                },
+                                  React.createElement('option', { value: 'winsorize' }, 'Winsorize (Cap to 5th / 95th percentile)'),
+                                  React.createElement('option', { value: 'quarantine' }, 'Quarantine extreme outliers'),
+                                  React.createElement('option', { value: 'keep' }, 'Retain outliers unchanged')
+                                )
+                              )
+                            ),
+                            React.createElement('div', { style: { display: 'flex', gap: 20, marginTop: 12 } },
+                              React.createElement('label', { style: { display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.8125rem', color: '#E2E8F0', cursor: 'pointer' } },
+                                React.createElement('input', {
+                                  type: 'checkbox',
+                                  checked: cleaningOptions.harmonizeCategories,
+                                  onChange: (e) => setCleaningOptions({ ...cleaningOptions, harmonizeCategories: e.target.checked })
+                                }),
+                                'Harmonize categorical typos (Levenshtein ≤ 2)'
+                              ),
+                              React.createElement('label', { style: { display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.8125rem', color: '#E2E8F0', cursor: 'pointer' } },
+                                React.createElement('input', {
+                                  type: 'checkbox',
+                                  checked: cleaningOptions.normalizeColumnNames,
+                                  onChange: (e) => setCleaningOptions({ ...cleaningOptions, normalizeColumnNames: e.target.checked })
+                                }),
+                                'Normalize headers (snake_case, trim)'
+                              )
+                            )
+                          ),
+
+                          React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 } },
+                            React.createElement('div', { style: { fontSize: '0.8125rem', fontWeight: 700, color: '#FFF' } }, 'Select Proposed Operations to Execute:'),
+                            React.createElement('div', { style: { display: 'flex', gap: 10 } },
+                              React.createElement('button', {
+                                type: 'button',
+                                style: { background: 'none', border: 'none', color: '#38BDF8', fontSize: '0.75rem', cursor: 'pointer', padding: 0 },
+                                onClick: () => setCleaningSelectedOps(new Set((cleaningPlan.operations || []).map(o => o.id)))
+                              }, 'Select All'),
+                              React.createElement('button', {
+                                type: 'button',
+                                style: { background: 'none', border: 'none', color: '#9CA3AF', fontSize: '0.75rem', cursor: 'pointer', padding: 0 },
+                                onClick: () => setCleaningSelectedOps(new Set())
+                              }, 'Clear All')
+                            )
+                          ),
+
+                          React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 240, overflowY: 'auto' } },
+                            (cleaningPlan.operations || []).map(op => {
+                              const isChecked = cleaningSelectedOps.has(op.id);
+                              return React.createElement('label', {
+                                key: op.id,
+                                style: {
+                                  display: 'flex', alignItems: 'flex-start', gap: 10, padding: '10px 12px', borderRadius: 8,
+                                  backgroundColor: isChecked ? 'rgba(56, 189, 248, 0.08)' : 'rgba(255, 255, 255, 0.02)',
+                                  border: isChecked ? '1px solid rgba(56, 189, 248, 0.3)' : '1px solid rgba(255, 255, 255, 0.05)',
+                                  cursor: 'pointer'
+                                }
+                              },
+                                React.createElement('input', {
+                                  type: 'checkbox',
+                                  checked: isChecked,
+                                  onChange: (e) => {
+                                    const next = new Set(cleaningSelectedOps);
+                                    if (e.target.checked) next.add(op.id); else next.delete(op.id);
+                                    setCleaningSelectedOps(next);
+                                  },
+                                  style: { marginTop: 3, accentColor: '#38BDF8' }
+                                }),
+                                React.createElement('div', { style: { flex: 1 } },
+                                  React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 } },
+                                    React.createElement('span', { className: 'badge badge-purple', style: { fontSize: '0.65rem' } }, op.type || 'TRANSFORM'),
+                                    React.createElement('span', { style: { fontWeight: 600, color: '#FFF', fontSize: '0.84375rem' } }, op.column ? `Column: ${op.column}` : 'Entire Dataset'),
+                                    op.severity === 'high' && React.createElement('span', { style: { color: '#F87171', fontSize: '0.7rem', fontWeight: 700 } }, '● Critical')
+                                  ),
+                                  React.createElement('div', { style: { color: '#9CA3AF', fontSize: '0.75rem' } }, op.reason || op.action),
+                                  op.affectedCount ? React.createElement('div', { style: { color: '#38BDF8', fontSize: '0.7rem', marginTop: 2 } }, `Impact: ${op.affectedCount} values affected`) : null
+                                )
+                              );
+                            })
+                          ),
+
+                          /* Destructive Transformation Safeguard Confirmation */
+                          (cleaningOptions.missingStrategy === 'drop' || cleaningOptions.missingStrategy === 'quarantine' || cleaningOptions.outlierStrategy === 'quarantine') &&
+                          React.createElement('div', {
+                            className: 'animate-fade-in',
+                            style: {
+                              padding: '12px 14px',
+                              borderRadius: 10,
+                              backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                              border: '1px solid rgba(239, 68, 68, 0.35)',
+                              marginTop: 14,
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 12
+                            }
+                          },
+                            React.createElement('input', {
+                              type: 'checkbox',
+                              id: 'confirm-destructive-cb',
+                              checked: confirmDestructiveClean,
+                              onChange: (e) => setConfirmDestructiveClean(e.target.checked),
+                              style: { width: 16, height: 16, accentColor: '#EF4444', cursor: 'pointer' }
+                            }),
+                            React.createElement('label', {
+                              htmlFor: 'confirm-destructive-cb',
+                              style: { fontSize: '0.8125rem', color: '#FCA5A5', cursor: 'pointer', lineHeight: 1.4 }
+                            },
+                              React.createElement('strong', null, 'Confirmation Required: '),
+                              'The selected configuration will drop or quarantine records. Original raw dataset v1 is preserved untouched. Check this box to confirm executing this transformation on v2.'
+                            )
+                          )
+                        )
+                      )
+                    ),
+
+                    !cleaningResult && React.createElement('div', { style: { display: 'flex', justifyContent: 'flex-end', gap: 12, paddingTop: 14, borderTop: '1px solid rgba(255,255,255,0.08)' } },
+                      React.createElement('button', {
+                        type: 'button',
+                        className: 'btn-secondary-action',
+                        onClick: () => setIsCleaningStudioOpen(false)
+                      }, 'Cancel'),
+                      React.createElement('button', {
+                        type: 'button',
+                        className: 'btn-primary-action',
+                        disabled: isCleaningLoading || cleaningSelectedOps.size === 0 || ((cleaningOptions.missingStrategy === 'drop' || cleaningOptions.missingStrategy === 'quarantine' || cleaningOptions.outlierStrategy === 'quarantine') && !confirmDestructiveClean),
+                        onClick: handleExecuteCleaning
+                      }, isCleaningLoading ? 'Executing Clean...' : `Execute Safe Clean (${cleaningSelectedOps.size} Ops) →`)
+                    )
+                  )
+                ),
+
+                /* AI-Assisted Semantic Understanding Modal */
+                isAiUnderstandOpen && React.createElement('div', { className: 'upload-modal-overlay animate-fade-in' },
+                  React.createElement('div', { className: 'upload-modal-card', style: { maxWidth: 740, maxHeight: '90vh', display: 'flex', flexDirection: 'column' } },
+                    React.createElement('div', { className: 'modal-header-row' },
+                      React.createElement('div', null,
+                        React.createElement('div', { style: { fontSize: '0.75rem', fontWeight: 700, color: '#A78BFA', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 2 } }, 'AI SEMANTIC UNDERSTANDING'),
+                        React.createElement('h3', { className: 'modal-title', style: { margin: 0 } }, 'Dataset Semantics & Domain Inference'),
+                        React.createElement('p', { className: 'modal-subtitle', style: { margin: '2px 0 0 0' } }, 'Powered by Google Gemini API with strict prompt injection defense and data minimization.')
+                      ),
+                      React.createElement('button', {
+                        className: 'btn-icon-close',
+                        onClick: () => setIsAiUnderstandOpen(false)
+                      }, '✕')
+                    ),
+
+                    React.createElement('div', { style: { overflowY: 'auto', padding: '16px 2px', flex: 1 } },
+                      isAiUnderstandLoading && React.createElement('div', { style: { padding: '48px 0', textAlign: 'center' } },
+                        React.createElement('div', { className: 'spinner', style: { width: 36, height: 36, border: '3px solid rgba(167, 139, 250, 0.2)', borderTopColor: '#A78BFA', borderRadius: '50%', animation: 'spin 1s linear infinite', margin: '0 auto 16px' } }),
+                        React.createElement('h4', { style: { color: '#FFF', margin: '0 0 8px 0' } }, 'Generating AI Semantic Profile...'),
+                        React.createElement('p', { style: { color: '#9CA3AF', fontSize: '0.84375rem', margin: 0 } }, 'Analyzing schema semantics, inferring business domain, and formulating recommendations.')
+                      ),
+
+                      !isAiUnderstandLoading && aiUnderstandData && React.createElement(React.Fragment, null,
+                        React.createElement('div', { style: { padding: '10px 14px', borderRadius: 8, backgroundColor: 'rgba(56, 189, 248, 0.08)', border: '1px solid rgba(56, 189, 248, 0.25)', fontSize: '0.75rem', color: '#7DD3FC', marginBottom: 16 } },
+                          '🔒 Data Minimization & Injection Defenses: Only anonymized schema tokens & statistical digests were submitted; zero raw rows exfiltrated.'
+                        ),
+
+                        React.createElement('div', { style: { padding: 14, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', marginBottom: 16 } },
+                          React.createElement('div', { style: { fontSize: '0.75rem', color: '#9CA3AF', textTransform: 'uppercase', fontWeight: 700, marginBottom: 4 } }, 'DOMAIN CLASSIFICATION'),
+                          React.createElement('div', { style: { fontSize: '1.1rem', fontWeight: 700, color: '#A78BFA', marginBottom: 8 } }, aiUnderstandData.domainClassification || 'Enterprise Business Intelligence'),
+                          React.createElement('p', { style: { color: '#E2E8F0', fontSize: '0.84375rem', margin: 0, lineHeight: 1.5 } }, aiUnderstandData.datasetSummary || 'No summary available.')
+                        ),
+
+                        aiUnderstandData.columnSemantics && aiUnderstandData.columnSemantics.length > 0 && React.createElement('div', { style: { marginBottom: 16 } },
+                          React.createElement('div', { style: { fontSize: '0.8125rem', fontWeight: 700, color: '#FFF', marginBottom: 8 } }, 'Inferred Attribute Semantics:'),
+                          React.createElement('div', { style: { maxHeight: 180, overflowY: 'auto', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 8 } },
+                            React.createElement('table', { style: { width: '100%', borderCollapse: 'collapse', fontSize: '0.75rem', textAlign: 'left' } },
+                              React.createElement('thead', null,
+                                React.createElement('tr', { style: { backgroundColor: 'rgba(255,255,255,0.05)', color: '#9CA3AF' } },
+                                  React.createElement('th', { style: { padding: '8px 10px' } }, 'COLUMN'),
+                                  React.createElement('th', { style: { padding: '8px 10px' } }, 'SEMANTIC ROLE'),
+                                  React.createElement('th', { style: { padding: '8px 10px' } }, 'INFERRED MEANING'),
+                                  React.createElement('th', { style: { padding: '8px 10px' } }, 'QUALITY RULE')
+                                )
+                              ),
+                              React.createElement('tbody', null,
+                                aiUnderstandData.columnSemantics.map((cs, idx) => React.createElement('tr', { key: idx, style: { borderTop: '1px solid rgba(255,255,255,0.04)' } },
+                                  React.createElement('td', { style: { padding: '8px 10px', color: '#FFF', fontWeight: 600 } }, cs.column),
+                                  React.createElement('td', { style: { padding: '8px 10px', color: '#38BDF8' } }, cs.businessEntity || 'Metric'),
+                                  React.createElement('td', { style: { padding: '8px 10px', color: '#CBD5E1' } }, cs.suggestedMeaning),
+                                  React.createElement('td', { style: { padding: '8px 10px', color: '#9CA3AF' } }, cs.recommendedRule || 'Validate format')
+                                ))
+                              )
+                            )
+                          )
+                        ),
+
+                        aiUnderstandData.suggestedQuestions && aiUnderstandData.suggestedQuestions.length > 0 && React.createElement('div', null,
+                          React.createElement('div', { style: { fontSize: '0.8125rem', fontWeight: 700, color: '#FFF', marginBottom: 6 } }, 'Recommended Analytical Inquiries:'),
+                          React.createElement('ul', { style: { margin: 0, paddingLeft: 18, fontSize: '0.8125rem', color: '#CBD5E1', lineHeight: 1.6 } },
+                            aiUnderstandData.suggestedQuestions.map((q, idx) => React.createElement('li', { key: idx }, q))
+                          )
+                        )
+                      )
+                    ),
+
+                    React.createElement('div', { style: { display: 'flex', justifyContent: 'flex-end', gap: 12, paddingTop: 14, borderTop: '1px solid rgba(255,255,255,0.08)' } },
+                      React.createElement('button', {
+                        type: 'button',
+                        className: 'btn-secondary-action',
+                        onClick: () => setIsAiUnderstandOpen(false)
+                      }, 'Close'),
+                      React.createElement('button', {
+                        type: 'button',
+                        className: 'btn-primary-action',
+                        onClick: () => {
+                          setIsAiUnderstandOpen(false);
+                          handleOpenCleaningStudio(activeDatasetId);
+                        }
+                      }, 'Open Safe Cleaning Studio →')
+                    )
+                  )
+                ),
+
+                /* Document & Fact Viewer Modal (Phase B: Comprehensive Unstructured Document Intelligence) */
+                isDocumentViewerOpen && React.createElement('div', { className: 'upload-modal-overlay animate-fade-in' },
+                  React.createElement('div', { className: 'upload-modal-card', style: { maxWidth: 840, maxHeight: '92vh', display: 'flex', flexDirection: 'column' } },
+                    React.createElement('div', { className: 'modal-header-row' },
+                      React.createElement('div', null,
+                        React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 } },
+                          React.createElement('span', { style: { fontSize: '0.75rem', fontWeight: 700, color: '#34D399', textTransform: 'uppercase', letterSpacing: '0.08em' } }, 'DOCUMENT INTELLIGENCE STUDIO'),
+                          React.createElement('span', { className: 'badge badge-purple', style: { fontSize: '0.65rem' } }, activeDatasetDetails?.dataset?.file_type || 'DOCUMENT'),
+                          React.createElement('span', { className: 'badge', style: { fontSize: '0.65rem', backgroundColor: 'rgba(56, 189, 248, 0.15)', color: '#38BDF8', border: '1px solid rgba(56, 189, 248, 0.3)' } },
+                            activeDatasetDetails?.deepProfile?.documentProfile?.classification?.category || 'General Documentation'
+                          ),
+                          activeDatasetDetails?.documentData?.isScanned && React.createElement('span', { className: 'badge', style: { fontSize: '0.65rem', backgroundColor: 'rgba(245, 158, 11, 0.15)', color: '#F59E0B' } }, 'Scanned Document')
+                        ),
+                        React.createElement('h3', { className: 'modal-title', style: { margin: 0 } }, activeDatasetDetails?.dataset?.name || 'Document Content'),
+                        React.createElement('p', { className: 'modal-subtitle', style: { margin: '2px 0 0 0' } }, 'Grounded extraction, BM25 passage search, verifiable citations, and multi-doc comparison.')
+                      ),
+                      React.createElement('button', {
+                        className: 'btn-icon-close',
+                        onClick: () => setIsDocumentViewerOpen(false)
+                      }, '✕')
+                    ),
+
+                    /* Multi-Tab Navigation */
+                    React.createElement('div', {
+                      style: {
+                        display: 'flex',
+                        gap: 8,
+                        padding: '10px 0',
+                        borderBottom: '1px solid rgba(255,255,255,0.08)'
+                      }
+                    },
+                      React.createElement('button', {
+                        type: 'button',
+                        className: docViewerTab === 'overview' ? 'btn-primary-action' : 'btn-secondary-action',
+                        style: { padding: '6px 14px', fontSize: '0.8125rem' },
+                        onClick: () => setDocViewerTab('overview')
+                      }, '📄 Overview & Text'),
+                      React.createElement('button', {
+                        type: 'button',
+                        className: docViewerTab === 'search' ? 'btn-primary-action' : 'btn-secondary-action',
+                        style: { padding: '6px 14px', fontSize: '0.8125rem' },
+                        onClick: () => setDocViewerTab('search')
+                      }, '🔍 Passage Search & Citations'),
+                      React.createElement('button', {
+                        type: 'button',
+                        className: docViewerTab === 'qa' ? 'btn-primary-action' : 'btn-secondary-action',
+                        style: { padding: '6px 14px', fontSize: '0.8125rem' },
+                        onClick: () => setDocViewerTab('qa')
+                      }, '💡 Grounded Q&A'),
+                      React.createElement('button', {
+                        type: 'button',
+                        className: docViewerTab === 'compare' ? 'btn-primary-action' : 'btn-secondary-action',
+                        style: { padding: '6px 14px', fontSize: '0.8125rem' },
+                        onClick: () => setDocViewerTab('compare')
+                      }, '⚖️ Multi-Doc Compare')
+                    ),
+
+                    /* Tab Content Container */
+                    React.createElement('div', { style: { overflowY: 'auto', padding: '16px 2px', flex: 1 } },
+                      /* TAB 1: Overview & Content */
+                      docViewerTab === 'overview' && React.createElement('div', { className: 'animate-fade-in' },
+                        React.createElement('div', { className: 'dense-grid-3', style: { gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, marginBottom: 16 } },
+                          React.createElement('div', { className: 'kpi-card-v2', style: { padding: 10 } },
+                            React.createElement('div', { className: 'kpi-title-v2', style: { fontSize: '0.6875rem' } }, 'WORD COUNT'),
+                            React.createElement('div', { className: 'kpi-value-v2', style: { fontSize: '1.2rem', color: '#38BDF8' } },
+                              (activeDatasetDetails?.documentData?.wordCount || activeDatasetDetails?.deepProfile?.documentProfile?.metrics?.wordCount || 0).toLocaleString()
+                            )
+                          ),
+                          React.createElement('div', { className: 'kpi-card-v2', style: { padding: 10 } },
+                            React.createElement('div', { className: 'kpi-title-v2', style: { fontSize: '0.6875rem' } }, 'PAGES / SECTIONS'),
+                            React.createElement('div', { className: 'kpi-value-v2', style: { fontSize: '1.2rem', color: '#A78BFA' } },
+                              activeDatasetDetails?.documentData?.pageCount || activeDatasetDetails?.documentData?.sections?.length || 1
+                            )
+                          ),
+                          React.createElement('div', { className: 'kpi-card-v2', style: { padding: 10 } },
+                            React.createElement('div', { className: 'kpi-title-v2', style: { fontSize: '0.6875rem' } }, 'EXTRACTION CONFIDENCE'),
+                            React.createElement('div', { className: 'kpi-value-v2', style: { fontSize: '1.2rem', color: '#34D399' } },
+                              `${Math.round((activeDatasetDetails?.deepProfile?.documentProfile?.extractionConfidence || 1.0) * 100)}%`
+                            )
+                          ),
+                          React.createElement('div', { className: 'kpi-card-v2', style: { padding: 10 } },
+                            React.createElement('div', { className: 'kpi-title-v2', style: { fontSize: '0.6875rem' } }, 'LANGUAGE'),
+                            React.createElement('div', { className: 'kpi-value-v2', style: { fontSize: '1.2rem', color: '#CBD5E1' } },
+                              (activeDatasetDetails?.deepProfile?.documentProfile?.language || 'en').toUpperCase()
+                            )
+                          )
+                        ),
+
+                        /* Grounded Summary */
+                        activeDatasetDetails?.deepProfile?.documentProfile?.summary && React.createElement('div', {
+                          style: { padding: 14, borderRadius: 10, backgroundColor: 'rgba(56, 189, 248, 0.05)', border: '1px solid rgba(56, 189, 248, 0.2)', marginBottom: 16 }
+                        },
+                          React.createElement('div', { style: { fontSize: '0.75rem', fontWeight: 700, color: '#38BDF8', textTransform: 'uppercase', marginBottom: 6 } }, 'GROUNDED EXECUTIVE SUMMARY'),
+                          React.createElement('p', { style: { color: '#E2E8F0', fontSize: '0.84375rem', lineHeight: 1.6, margin: 0 } },
+                            activeDatasetDetails.deepProfile.documentProfile.summary
+                          )
+                        ),
+
+                        /* Extracted Entities */
+                        activeDatasetDetails?.deepProfile?.documentProfile?.entities && React.createElement('div', {
+                          style: { padding: 14, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', marginBottom: 16 }
+                        },
+                          React.createElement('div', { style: { fontSize: '0.75rem', fontWeight: 700, color: '#9CA3AF', textTransform: 'uppercase', marginBottom: 8 } }, 'EXTRACTED ENTITIES & PROPER NOUNS'),
+                          React.createElement('div', { style: { display: 'flex', flexWrap: 'wrap', gap: 6 } },
+                            (activeDatasetDetails.deepProfile.documentProfile.entities.monetaryValues || []).slice(0, 5).map((m, i) => React.createElement('span', { key: `m_${i}`, className: 'badge', style: { backgroundColor: 'rgba(52, 211, 153, 0.15)', color: '#34D399', fontSize: '0.75rem' } }, m)),
+                            (activeDatasetDetails.deepProfile.documentProfile.entities.dates || []).slice(0, 5).map((d, i) => React.createElement('span', { key: `d_${i}`, className: 'badge', style: { backgroundColor: 'rgba(167, 139, 250, 0.15)', color: '#A78BFA', fontSize: '0.75rem' } }, d)),
+                            (activeDatasetDetails.deepProfile.documentProfile.entities.emails || []).slice(0, 4).map((e, i) => React.createElement('span', { key: `e_${i}`, className: 'badge', style: { backgroundColor: 'rgba(56, 189, 248, 0.15)', color: '#38BDF8', fontSize: '0.75rem' } }, e)),
+                            (activeDatasetDetails.deepProfile.documentProfile.entities.organizationsOrProperNouns || []).slice(0, 5).map((o, i) => React.createElement('span', { key: `o_${i}`, className: 'badge', style: { backgroundColor: 'rgba(255, 255, 255, 0.1)', color: '#FFF', fontSize: '0.75rem' } }, o))
+                          )
+                        ),
+
+                        /* Extracted Document Text */
+                        React.createElement('div', { style: { padding: 14, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', marginBottom: 16 } },
+                          React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 } },
+                            React.createElement('div', { style: { fontSize: '0.75rem', color: '#9CA3AF', textTransform: 'uppercase', fontWeight: 700 } }, 'EXTRACTED SOURCE TEXT STREAM'),
+                            React.createElement('div', { style: { display: 'flex', gap: 6 } },
+                              React.createElement('button', {
+                                type: 'button',
+                                className: 'btn-secondary-action',
+                                style: { padding: '3px 8px', fontSize: '0.7rem' },
+                                onClick: () => {
+                                  const text = activeDatasetDetails?.documentData?.text || (activeDatasetDetails?.rawRows || []).map(r => r.content || '').join('\n');
+                                  navigator.clipboard.writeText(text);
+                                  alert('Extracted text copied to clipboard.');
+                                }
+                              }, '📋 Copy Text'),
+                              React.createElement('button', {
+                                type: 'button',
+                                className: 'btn-primary-action',
+                                style: { padding: '3px 8px', fontSize: '0.7rem' },
+                                onClick: () => {
+                                  const docProfile = activeDatasetDetails?.deepProfile?.documentProfile;
+                                  const exportPayload = {
+                                    documentName: activeDatasetDetails?.dataset?.name || 'document',
+                                    fileType: activeDatasetDetails?.dataset?.file_type || 'DOCUMENT',
+                                    classification: docProfile?.classification || { category: 'General Documentation' },
+                                    metrics: {
+                                      wordCount: activeDatasetDetails?.documentData?.wordCount || docProfile?.metrics?.wordCount || 0,
+                                      pageCount: activeDatasetDetails?.documentData?.pageCount || activeDatasetDetails?.documentData?.sections?.length || 1,
+                                      extractionConfidence: docProfile?.extractionConfidence || 1.0,
+                                      language: docProfile?.language || 'en'
+                                    },
+                                    groundedSummary: docProfile?.summary || '',
+                                    entities: docProfile?.entities || {},
+                                    structuredTables: activeDatasetDetails?.documentData?.tables || [],
+                                    keyPointsWithCitations: docProfile?.keyPoints || [],
+                                    exportedAt: new Date().toISOString()
+                                  };
+                                  const blob = new Blob([JSON.stringify(exportPayload, null, 2)], { type: 'application/json' });
+                                  const a = document.createElement('a');
+                                  a.href = URL.createObjectURL(blob);
+                                  a.download = `${(activeDatasetDetails?.dataset?.name || 'document').replace(/[^a-z0-9_-]/gi, '_')}_intelligence_report.json`;
+                                  a.click();
+                                }
+                              }, '📥 Export Report')
+                            )
+                          ),
+                          React.createElement('div', { style: { maxHeight: 220, overflowY: 'auto', whiteSpace: 'pre-wrap', fontSize: '0.8125rem', color: '#E2E8F0', lineHeight: 1.6, padding: 10, backgroundColor: 'rgba(0,0,0,0.3)', borderRadius: 6 } },
+                            activeDatasetDetails?.documentData?.text || (activeDatasetDetails?.rawRows || []).map(r => r.content || JSON.stringify(r)).join('\n') || 'No document text found.'
+                          )
+                        ),
+
+                        /* Embedded Structured Tables */
+                        activeDatasetDetails?.documentData?.tables && activeDatasetDetails.documentData.tables.length > 0 && React.createElement('div', null,
+                          React.createElement('div', { style: { fontSize: '0.8125rem', fontWeight: 700, color: '#34D399', marginBottom: 8 } }, `Embedded Structured Tables (${activeDatasetDetails.documentData.tables.length} Detected):`),
+                          activeDatasetDetails.documentData.tables.map((tbl, tIdx) => React.createElement('div', { key: tIdx, style: { marginBottom: 12, border: '1px solid rgba(255,255,255,0.08)', borderRadius: 8, padding: 8 } },
+                            React.createElement('div', { style: { fontSize: '0.75rem', color: '#9CA3AF', marginBottom: 4 } }, `Table ${tIdx + 1} (${tbl.rows?.length || 0} rows)`),
+                            React.createElement('table', { style: { width: '100%', borderCollapse: 'collapse', fontSize: '0.75rem' } },
+                              React.createElement('thead', null,
+                                React.createElement('tr', null, (tbl.headers || []).map((h, hIdx) => React.createElement('th', { key: hIdx, style: { padding: '6px 8px', color: '#38BDF8', textAlign: 'left' } }, h)))
+                              ),
+                              React.createElement('tbody', null,
+                                (tbl.rows || []).slice(0, 5).map((r, rIdx) => React.createElement('tr', { key: rIdx },
+                                  (Array.isArray(r) ? r : Object.values(r)).map((v, cIdx) => React.createElement('td', { key: cIdx, style: { padding: '6px 8px', color: '#FFF' } }, String(v)))
+                                ))
+                              )
+                            )
+                          ))
+                        )
+                      ),
+
+                      /* TAB 2: Passage Search & Citations */
+                      docViewerTab === 'search' && React.createElement('div', { className: 'animate-fade-in' },
+                        React.createElement('div', { style: { display: 'flex', gap: 10, marginBottom: 16 } },
+                          React.createElement('input', {
+                            type: 'text',
+                            className: 'auth-input-control',
+                            placeholder: 'Search keywords, metrics, or phrases in document passages...',
+                            value: docSearchQuery,
+                            onChange: (e) => setDocSearchQuery(e.target.value),
+                            onKeyDown: (e) => e.key === 'Enter' && handleSearchDocumentInViewer()
+                          }),
+                          React.createElement('button', {
+                            type: 'button',
+                            className: 'btn-primary-action',
+                            disabled: isDocSearching || !docSearchQuery.trim(),
+                            onClick: handleSearchDocumentInViewer
+                          }, isDocSearching ? 'Searching...' : 'Search')
+                        ),
+
+                        docSearchResults.length > 0 && React.createElement('div', null,
+                          React.createElement('div', { style: { fontSize: '0.8125rem', color: '#9CA3AF', marginBottom: 10 } }, `Found ${docSearchResults.length} relevant passages with source citations:`),
+                          docSearchResults.map((res, sIdx) => React.createElement('div', {
+                            key: sIdx,
+                            style: { padding: 12, borderRadius: 8, backgroundColor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', marginBottom: 10 }
+                          },
+                            React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 } },
+                              React.createElement('span', { className: 'badge badge-purple', style: { fontSize: '0.7rem' } }, res.citation),
+                              React.createElement('span', { style: { fontSize: '0.75rem', color: '#38BDF8', fontWeight: 600 } }, `Relevance Score: ${res.score}`)
+                            ),
+                            React.createElement('p', { style: { color: '#E2E8F0', fontSize: '0.8125rem', margin: 0, lineHeight: 1.5 } }, res.snippet || res.text)
+                          ))
+                        ),
+
+                        docSearchResults.length === 0 && !isDocSearching && React.createElement('div', { style: { textAlign: 'center', padding: '36px 0', color: '#9CA3AF', fontSize: '0.875rem' } },
+                          'Enter a search query above to find specific paragraphs, sentences, and verifiable citations.'
+                        )
+                      ),
+
+                      /* TAB 3: Grounded Q&A */
+                      docViewerTab === 'qa' && React.createElement('div', { className: 'animate-fade-in' },
+                        React.createElement('div', { style: { display: 'flex', gap: 10, marginBottom: 16 } },
+                          React.createElement('input', {
+                            type: 'text',
+                            className: 'auth-input-control',
+                            placeholder: 'Ask a question grounded in this document (e.g. What were the quarterly highlights?)...',
+                            value: docQaQuestion,
+                            onChange: (e) => setDocQaQuestion(e.target.value),
+                            onKeyDown: (e) => e.key === 'Enter' && handleQaDocumentInViewer()
+                          }),
+                          React.createElement('button', {
+                            type: 'button',
+                            className: 'btn-primary-action',
+                            disabled: isDocQaLoading || !docQaQuestion.trim(),
+                            onClick: handleQaDocumentInViewer
+                          }, isDocQaLoading ? 'Analyzing...' : 'Ask')
+                        ),
+
+                        docQaAnswer && React.createElement('div', { style: { padding: 16, borderRadius: 10, backgroundColor: docQaAnswer.sufficientEvidence ? 'rgba(52, 211, 153, 0.08)' : 'rgba(245, 158, 11, 0.08)', border: docQaAnswer.sufficientEvidence ? '1px solid rgba(52, 211, 153, 0.25)' : '1px solid rgba(245, 158, 11, 0.25)' } },
+                          React.createElement('div', { style: { fontWeight: 700, fontSize: '0.875rem', color: docQaAnswer.sufficientEvidence ? '#34D399' : '#F59E0B', marginBottom: 8 } },
+                            docQaAnswer.sufficientEvidence ? '✓ Grounded Answer with Source References:' : '⚠️ Evidence Notice:'
+                          ),
+                          React.createElement('p', { style: { color: '#E2E8F0', fontSize: '0.875rem', lineHeight: 1.6, margin: '0 0 12px 0' } }, docQaAnswer.answer),
+
+                          docQaAnswer.citations && docQaAnswer.citations.length > 0 && React.createElement('div', null,
+                            React.createElement('div', { style: { fontSize: '0.75rem', color: '#9CA3AF', textTransform: 'uppercase', marginBottom: 4 } }, 'VERIFIED CITATIONS:'),
+                            React.createElement('div', { style: { display: 'flex', flexWrap: 'wrap', gap: 6 } },
+                              docQaAnswer.citations.map((c, idx) => React.createElement('span', { key: idx, className: 'badge badge-purple', style: { fontSize: '0.75rem' } }, c))
+                            )
+                          )
+                        ),
+
+                        !docQaAnswer && !isDocQaLoading && React.createElement('div', { style: { textAlign: 'center', padding: '36px 0', color: '#9CA3AF', fontSize: '0.875rem' } },
+                          'Ask any analytical or factual question to receive a strictly grounded answer with precise citations.'
+                        )
+                      ),
+
+                      /* TAB 4: Multi-Doc Compare */
+                      docViewerTab === 'compare' && React.createElement('div', { className: 'animate-fade-in' },
+                        React.createElement('div', { style: { display: 'flex', gap: 10, marginBottom: 16, alignItems: 'center' } },
+                          React.createElement('label', { style: { fontSize: '0.8125rem', color: '#CBD5E1', minWidth: 100 } }, 'Compare with:'),
+                          React.createElement('select', {
+                            className: 'auth-input-control',
+                            value: docCompareTargetId,
+                            onChange: (e) => {
+                              setDocCompareTargetId(e.target.value);
+                              handleCompareDocumentInViewer(e.target.value);
+                            }
+                          },
+                            React.createElement('option', { value: '' }, '-- Select another dataset / document --'),
+                            userDatasets.filter(d => d.id !== activeDatasetId).map(d => React.createElement('option', { key: d.id, value: d.id }, `${d.name} (${d.file_type || 'Dataset'})`))
+                          ),
+                          React.createElement('button', {
+                            type: 'button',
+                            className: 'btn-primary-action',
+                            disabled: isDocComparing || !docCompareTargetId,
+                            onClick: () => handleCompareDocumentInViewer(docCompareTargetId)
+                          }, isDocComparing ? 'Comparing...' : 'Compare')
+                        ),
+
+                        docCompareResult && React.createElement('div', null,
+                          React.createElement('div', { className: 'dense-grid-3', style: { gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 } },
+                            React.createElement('div', { className: 'kpi-card-v2', style: { padding: 12 } },
+                              React.createElement('div', { className: 'kpi-title-v2', style: { fontSize: '0.7rem' } }, 'TOPIC SIMILARITY (JACCARD)'),
+                              React.createElement('div', { className: 'kpi-value-v2', style: { fontSize: '1.4rem', color: '#38BDF8' } }, `${docCompareResult.similarityPercentage}%`)
+                            ),
+                            React.createElement('div', { className: 'kpi-card-v2', style: { padding: 12 } },
+                              React.createElement('div', { className: 'kpi-title-v2', style: { fontSize: '0.7rem' } }, 'SHARED TOPIC COUNT'),
+                              React.createElement('div', { className: 'kpi-value-v2', style: { fontSize: '1.4rem', color: '#34D399' } }, docCompareResult.sharedTopicsCount)
+                            )
+                          ),
+
+                          docCompareResult.conflictingMetrics && docCompareResult.conflictingMetrics.length > 0 && React.createElement('div', {
+                            style: { padding: 12, borderRadius: 8, backgroundColor: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.3)', marginBottom: 14 }
+                          },
+                            React.createElement('div', { style: { color: '#F87171', fontWeight: 700, fontSize: '0.8125rem', marginBottom: 4 } }, '⚠️ Conflicting or Divergent Metrics Detected:'),
+                            docCompareResult.conflictingMetrics.map((cf, idx) => React.createElement('p', { key: idx, style: { color: '#FCA5A5', fontSize: '0.8125rem', margin: 0 } }, cf.explanation))
+                          ),
+
+                          React.createElement('div', { style: { padding: 12, borderRadius: 8, backgroundColor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)' } },
+                            React.createElement('div', { style: { fontSize: '0.75rem', fontWeight: 700, color: '#9CA3AF', textTransform: 'uppercase', marginBottom: 6 } }, 'SHARED RECURRING TOPICS:'),
+                            React.createElement('div', { style: { display: 'flex', flexWrap: 'wrap', gap: 6 } },
+                              (docCompareResult.sharedTopicsSample || []).map((t, i) => React.createElement('span', { key: i, className: 'badge badge-purple', style: { fontSize: '0.75rem' } }, t))
+                            )
+                          )
+                        ),
+
+                        !docCompareResult && !isDocComparing && React.createElement('div', { style: { textAlign: 'center', padding: '36px 0', color: '#9CA3AF', fontSize: '0.875rem' } },
+                          'Select another document or dataset from the dropdown above to run automated multi-document topic alignment and metric conflict analysis.'
+                        )
+                      )
+                    ),
+
+                    React.createElement('div', { style: { display: 'flex', justifyContent: 'flex-end', paddingTop: 14, borderTop: '1px solid rgba(255,255,255,0.08)' } },
+                      React.createElement('button', {
+                        type: 'button',
+                        className: 'btn-secondary-action',
+                        onClick: () => setIsDocumentViewerOpen(false)
+                      }, 'Close')
+                    )
+                  )
+                )
               )
             )
           )

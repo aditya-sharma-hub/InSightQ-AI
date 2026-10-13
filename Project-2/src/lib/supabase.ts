@@ -1,8 +1,8 @@
 import { createClient } from '@supabase/supabase-js';
 
 /* Retrieve Environment Variables */
-const supabaseUrl = import.meta.env?.VITE_SUPABASE_URL || 'https://qldrqdnjpohyuhqvirmc.supabase.co';
-const supabasePublishableKey = import.meta.env?.VITE_SUPABASE_PUBLISHABLE_KEY || 'sb_publishable_uPbLIWSlLfxv8NZbzN1Drw_YPTr21t1';
+const supabaseUrl = import.meta.env?.VITE_SUPABASE_URL || '';
+const supabasePublishableKey = import.meta.env?.VITE_SUPABASE_PUBLISHABLE_KEY || '';
 
 /* Validate Required Configuration */
 if (!supabaseUrl || !supabasePublishableKey) {

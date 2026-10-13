@@ -1,0 +1,74 @@
+name: InsightIQ AI — Production CI/CD Pipeline
+
+on:
+  push:
+    branches: [ master, main ]
+  pull_request:
+    branches: [ master, main ]
+
+jobs:
+  test-and-verify:
+    name: Comprehensive Test Suite & Integrity
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js Environment
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm ci || npm install
+
+      - name: Run Phase A Verification (Tabular Ingestion & Cleaning)
+        run: node test_phase_a_tabular.js
+
+      - name: Run Phase B Verification (Unstructured Document Intelligence)
+        run: node test_phase_b_unstructured.js
+
+      - name: Run Phase C Verification (Statistical & Machine Learning Engine)
+        run: node test_phase_c_statistical_engine.js
+
+      - name: Run Phase D Verification (Unified Intelligence & NL Analytics)
+        run: node test_phase_d_unified_intelligence.js
+
+      - name: Run Universal Data Engine Suite
+        run: node test_universal_data_engine.js
+
+      - name: Run Production Readiness & Reliability Suite
+        run: node test_phase_e_production_readiness.js
+
+  security-audit:
+    name: Security & Secret Audit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js Environment
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install Dependencies
+        run: npm ci || npm install
+
+      - name: Scan for Unsafe Secret Leaks
+        run: |
+          echo "Scanning codebase for hardcoded private keys..."
+          ! grep -rn "SERVICE_ROLE_KEY" --exclude-dir=node_modules --exclude-dir=.git . || exit 1
+          echo "No service role keys found."
+
+      - name: Syntax & Build Validation
+        run: |
+          node -c server.js
+          node -c engine/index.js
+          node -c engine/ingestion/index.js
+          node -c engine/profiling/index.js
+          node -c engine/cleaning/index.js
+          node -c engine/analysis/index.js
+          node -c engine/understanding/index.js
+          node -c engine/intelligence/index.js
