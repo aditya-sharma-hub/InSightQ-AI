@@ -4,7 +4,7 @@
   "scripts": {
     "start": "node server.js",
     "test": "node test_phase_e_production_readiness.js",
-    "test:all": "node test_phase_a_tabular.js && node test_phase_b_unstructured.js && node test_phase_c_statistical_engine.js && node test_phase_d_unified_intelligence.js && node test_phase_e_production_readiness.js && node test_universal_data_engine.js && node test_regression_workspace_init.js",
+    "test:all": "node test_phase_a_tabular.js && node test_phase_b_unstructured.js && node test_phase_c_statistical_engine.js && node test_phase_d_unified_intelligence.js && node test_phase_e_production_readiness.js && node test_universal_data_engine.js && node test_regression_workspace_init.js && node test_port_fallback.js",
     "test:phase-a": "node test_phase_a_tabular.js",
     "test:phase-b": "node test_phase_b_unstructured.js",
     "test:phase-c": "node test_phase_c_statistical_engine.js",
@@ -12,6 +12,9 @@
     "test:phase-e": "node test_phase_e_production_readiness.js",
     "test:init": "node test_regression_workspace_init.js",
     "test:ml": "node test_ml_real_training.js",
+    "test:auth": "node test_auth_regression.js",
+    "test:clean": "node test_clean_workspace.js",
+    "test:port": "node test_port_fallback.js",
     "lint": "node -c server.js && node -c engine/index.js && node -c engine/intelligence/index.js"
   },
   "dependencies": {

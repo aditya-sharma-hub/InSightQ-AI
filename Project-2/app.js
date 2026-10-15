@@ -676,7 +676,7 @@ const ROLE_CONFIG = {
   data_scientist: {
     id: 'data_scientist',
     label: 'Data Scientist',
-    workspaceTitle: 'DATA SCIENCE WORKSPACE',
+    workspaceTitle: 'DATA SCIENTIST WORKSPACE',
     description: 'Advanced machine learning, predictive modeling, fine-tuning sandbox, and statistical experiments.',
     badgeColor: '#818CF8',
     defaultRoute: 'overview'
@@ -717,6 +717,7 @@ const ROLE_PERMISSIONS = {
     'activity.view',
     'notifications.view',
     'profile.view',
+    'settings.manage',
     'brief.view'
   ],
   data_scientist: [
@@ -736,6 +737,7 @@ const ROLE_PERMISSIONS = {
     'activity.view',
     'notifications.view',
     'profile.view',
+    'settings.manage',
     'brief.view'
   ],
   project_manager: [
@@ -748,12 +750,22 @@ const ROLE_PERMISSIONS = {
     'copilot.use',
     'activity.view',
     'notifications.view',
-    'profile.view'
+    'profile.view',
+    'settings.manage'
   ],
   admin: [
     '*'
   ]
 };
+
+const CANONICAL_ROLE_DISPLAY_NAMES = {
+  data_analyst: 'Data Analyst',
+  data_scientist: 'Data Scientist',
+  project_manager: 'Project Manager',
+  admin: 'Administrator'
+};
+
+const SELF_SELECTABLE_ROLE_IDS = ['data_analyst', 'data_scientist', 'project_manager'];
 
 function normalizeRole(rawRole) {
   if (!rawRole) return USER_ROLES.DATA_ANALYST;
@@ -771,6 +783,32 @@ function normalizeRole(rawRole) {
     return USER_ROLES.ADMIN;
   }
   return USER_ROLES.DATA_ANALYST;
+}
+
+function getCanonicalRole(rawRole) {
+  return normalizeRole(rawRole);
+}
+
+function getRoleDisplayName(rawRole) {
+  const norm = normalizeRole(rawRole);
+  return CANONICAL_ROLE_DISPLAY_NAMES[norm] || 'Data Analyst';
+}
+
+function isValidWorkspaceRole(rawRole) {
+  if (!rawRole) return false;
+  const str = String(rawRole).trim().toLowerCase().replace(/[\s_-]+/g, '_');
+  return [
+    'data_analyst', 'analyst', 'business_analyst', 'student', 'researcher',
+    'data_scientist', 'scientist', 'ml_engineer', 'ai_engineer',
+    'project_manager', 'pm', 'product_manager', 'program_manager',
+    'admin', 'administrator', 'system_admin', 'superadmin'
+  ].includes(str);
+}
+
+function isSelfSelectableRole(rawRole) {
+  if (!rawRole) return false;
+  const norm = normalizeRole(rawRole);
+  return SELF_SELECTABLE_ROLE_IDS.includes(norm);
 }
 
 function hasPermission(userRole, permission) {
@@ -1248,122 +1286,8 @@ function getNextActionForProject(progressDetails) {
   }
 }
 
-/* CANONICAL SHARED PROJECTS STORE */
-const CANONICAL_PROJECTS = [
-  {
-    id: 'proj-supply-chain-001',
-    name: 'Supply Chain Optimization',
-    description: 'End-to-end delivery intelligence, late shipment risk prediction, multi-region sales telemetry, and fulfillment automation.',
-    category: 'Supply Chain',
-    status: 'Active',
-    health: '98% On Track',
-    healthStatus: 'ontrack',
-    workspaceState: { projectConfigured: true, datasetAttached: true, profilingComplete: true, analyticsComplete: true, geographicComplete: false, modelingComplete: false, reportGenerated: false, projectFinalized: false },
-    owner: 'Alex Rivera',
-    ownerRole: 'data_analyst',
-    datasetIds: ['dataco-ds-001'],
-    datasetNames: ['DataCoSupplyChainDataset (180,519 rows)'],
-    members: [
-      { name: 'Alex Rivera', role: 'data_analyst', avatar: 'AR', color: '#38BDF8' },
-      { name: 'Dr. Elena Rostova', role: 'data_scientist', avatar: 'ER', color: '#818CF8' },
-      { name: 'Marcus Vance', role: 'project_manager', avatar: 'MV', color: '#34D399' },
-      { name: 'Sarah Chen', role: 'admin', avatar: 'SC', color: '#F472B6' }
-    ],
-    milestones: [
-      { id: 'm1', title: 'Data Ingestion & Hygiene Profiling', status: 'Completed', date: '2026-07-15', progress: 100, owner: 'Alex Rivera' },
-      { id: 'm2', title: 'Multi-Region Geographic Analysis', status: 'Completed', date: '2026-08-01', progress: 100, owner: 'Alex Rivera' },
-      { id: 'm3', title: 'Late Delivery Prediction Model v3', status: 'In Progress', date: '2026-08-25', progress: 85, owner: 'Dr. Elena Rostova' },
-      { id: 'm4', title: '90-Day Demand Forecasting Pipeline', status: 'In Progress', date: '2026-09-10', progress: 70, owner: 'Dr. Elena Rostova' },
-      { id: 'm5', title: 'Executive Stakeholder Summary PDF', status: 'Upcoming', date: '2026-09-25', progress: 20, owner: 'Marcus Vance' },
-      { id: 'm6', title: 'Production Automated Edge Deployment', status: 'Upcoming', date: '2026-10-15', progress: 0, owner: 'Sarah Chen' }
-    ],
-    risks: [
-      { id: 'r1', title: 'High late-delivery rate in Pacific Rim shipping lanes', severity: 'Critical', owner: 'Marcus Vance', status: 'Mitigating', impact: '$1.2M potential SLA penalty' },
-      { id: 'r2', title: 'Minor temporal drift in Q4 promotional demand spikes', severity: 'Moderate', owner: 'Dr. Elena Rostova', status: 'Monitoring', impact: '3.2% MAE variance' }
-    ],
-    models: [
-      { id: 'mod1', name: 'XGBoost_Late_Delivery_Predictor_v3', type: 'Classification', accuracy: '94.6%', latency: '38ms', status: 'Production Ready' },
-      { id: 'mod2', name: 'LSTM_Demand_Forecaster_v2', type: 'Time-Series', accuracy: '96.2%', latency: '64ms', status: 'In Training' }
-    ],
-    deliverables: [
-      { id: 'd1', name: 'Global Supply Chain Geographic Heatmap', role: 'Data Analyst', status: 'Approved' },
-      { id: 'd2', name: 'Late Shipment Anomaly Detection Filter', role: 'Data Analyst', status: 'Approved' },
-      { id: 'd3', name: '90-Day Prophet Lookback Evaluation', role: 'Data Scientist', status: 'Review' },
-      { id: 'd4', name: 'Q3 Executive Portfolio Health Report', role: 'Project Manager', status: 'Draft' }
-    ],
-    stats: { revenue: '$36.8M', profit: '$3.9M', records: '180,519', models: '2 Active', milestones: '6 Total' }
-  },
-  {
-    id: 'proj-customer-360-002',
-    name: 'Customer 360 & Churn Intelligence',
-    description: 'Customer segmentation, lifetime value forecasting, churn risk mitigation, and automated AI engagement triggers.',
-    category: 'Customer',
-    status: 'Active',
-    health: '94% On Track',
-    healthStatus: 'ontrack',
-    workspaceState: { projectConfigured: true, datasetAttached: true, profilingComplete: true, analyticsComplete: true, geographicComplete: false, modelingComplete: false, reportGenerated: false, projectFinalized: false },
-    owner: 'Marcus Vance',
-    ownerRole: 'project_manager',
-    datasetIds: ['dataco-ds-001'],
-    datasetNames: ['DataCoSupplyChainDataset (Customers Segment)'],
-    members: [
-      { name: 'Alex Rivera', role: 'data_analyst', avatar: 'AR', color: '#38BDF8' },
-      { name: 'Dr. Elena Rostova', role: 'data_scientist', avatar: 'ER', color: '#818CF8' },
-      { name: 'Marcus Vance', role: 'project_manager', avatar: 'MV', color: '#34D399' }
-    ],
-    milestones: [
-      { id: 'm201', title: 'RFM Customer Segmentation Cluster Analysis', status: 'Completed', date: '2026-07-20', progress: 100, owner: 'Alex Rivera' },
-      { id: 'm202', title: 'Churn Risk Gradient Boosted Classifier', status: 'In Progress', date: '2026-08-30', progress: 80, owner: 'Dr. Elena Rostova' },
-      { id: 'm203', title: 'Customer Retention Playbook PDF', status: 'Upcoming', date: '2026-09-18', progress: 15, owner: 'Marcus Vance' }
-    ],
-    risks: [
-      { id: 'r201', title: 'Segment 3 attrition increased 1.4% MoM', severity: 'Moderate', owner: 'Marcus Vance', status: 'Monitoring', impact: '$320K ARR at risk' }
-    ],
-    models: [
-      { id: 'mod201', name: 'RandomForest_Churn_Risk_Classifier_v2', type: 'Classification', accuracy: '91.8%', latency: '42ms', status: 'Production Ready' }
-    ],
-    deliverables: [
-      { id: 'd201', name: 'High-Value Customer RFM Matrix', role: 'Data Analyst', status: 'Approved' },
-      { id: 'd202', name: 'Churn Probability Scoring Webhook', role: 'Data Scientist', status: 'Testing' }
-    ],
-    stats: { revenue: '$14.2M', profit: '$1.8M', records: '20,652', models: '1 Active', milestones: '3 Total' }
-  },
-  {
-    id: 'proj-financial-audit-003',
-    name: 'Q3 Financial Ledger & Fraud Risk',
-    description: 'Automated ledger anomaly detection, cross-border payment audit, tax variance reconciliation, and SOC2 compliance logging.',
-    category: 'Finance',
-    status: 'Review',
-    health: '89% At Risk',
-    healthStatus: 'atrisk',
-    workspaceState: { projectConfigured: true, datasetAttached: true, profilingComplete: true, analyticsComplete: false, geographicComplete: false, modelingComplete: false, reportGenerated: false, projectFinalized: false },
-    owner: 'Sarah Chen',
-    ownerRole: 'admin',
-    datasetIds: ['dataco-ds-001'],
-    datasetNames: ['DataCoSupplyChainDataset (Financial Ledger)'],
-    members: [
-      { name: 'Alex Rivera', role: 'data_analyst', avatar: 'AR', color: '#38BDF8' },
-      { name: 'Marcus Vance', role: 'project_manager', avatar: 'MV', color: '#34D399' },
-      { name: 'Sarah Chen', role: 'admin', avatar: 'SC', color: '#F472B6' }
-    ],
-    milestones: [
-      { id: 'm301', title: 'Transaction Outlier & Z-Score Analysis', status: 'Completed', date: '2026-07-28', progress: 100, owner: 'Alex Rivera' },
-      { id: 'm302', title: 'SOC2 Type II Ledger Audit Certification', status: 'In Progress', date: '2026-09-05', progress: 60, owner: 'Sarah Chen' },
-      { id: 'm303', title: 'Quarterly Financial Variance Synthesis', status: 'Upcoming', date: '2026-09-30', progress: 10, owner: 'Marcus Vance' }
-    ],
-    risks: [
-      { id: 'r301', title: 'International wire validation latency delay', severity: 'Critical', owner: 'Sarah Chen', status: 'Investigating', impact: 'Regulatory reporting SLA' }
-    ],
-    models: [
-      { id: 'mod301', name: 'IsolationForest_Transaction_Anomaly_v1', type: 'Unsupervised', accuracy: '97.4%', latency: '24ms', status: 'Production Ready' }
-    ],
-    deliverables: [
-      { id: 'd301', name: 'Q3 Outlier Transactions Summary', role: 'Data Analyst', status: 'Approved' },
-      { id: 'd302', name: 'Audit Trail Immutable Hash Register', role: 'Administrator', status: 'Review' }
-    ],
-    stats: { revenue: '$36.8M', profit: '$3.9M', records: '180,519', models: '1 Active', milestones: '3 Total' }
-  }
-];
+/* CANONICAL SHARED PROJECTS STORE — Clean initial workspace */
+const CANONICAL_PROJECTS = [];
 
 /* 403 Forbidden Access Denied View */
 function AccessDeniedView({ effectiveRole, activeNav, onReturnToDashboard }) {
@@ -1557,6 +1481,10 @@ const PORTALS = {
 };
 
 window.normalizeRole = normalizeRole;
+window.getCanonicalRole = getCanonicalRole;
+window.getRoleDisplayName = getRoleDisplayName;
+window.isValidWorkspaceRole = isValidWorkspaceRole;
+window.isSelfSelectableRole = isSelfSelectableRole;
 window.hasPermission = hasPermission;
 window.can = can;
 window.hasRole = hasRole;
@@ -1697,19 +1625,82 @@ window.CANONICAL_PROJECTS = CANONICAL_PROJECTS;
   /* --------------------------------------------------------------------------
      3. Production Supabase Client & Application Architecture
      -------------------------------------------------------------------------- */
-  const SUPABASE_URL = (typeof window !== 'undefined' && (window.__ENV__?.VITE_SUPABASE_URL || window.localStorage?.getItem('insightiq_supabase_url'))) || '';
-  const SUPABASE_ANON_KEY = (typeof window !== 'undefined' && (window.__ENV__?.VITE_SUPABASE_PUBLISHABLE_KEY || window.localStorage?.getItem('insightiq_supabase_key'))) || '';
-  
-  const supabaseClient = (typeof window !== 'undefined' && window.supabase && SUPABASE_URL && SUPABASE_ANON_KEY)
-    ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  const getSupabaseConfig = () => {
+    const env = (typeof window !== 'undefined' && window.__ENV__) || {};
+    const procEnv = (typeof process !== 'undefined' && process.env) || {};
+    const url = (
+      env.VITE_SUPABASE_URL ||
+      env.NEXT_PUBLIC_SUPABASE_URL ||
+      env.SUPABASE_URL ||
+      env.REACT_APP_SUPABASE_URL ||
+      procEnv.VITE_SUPABASE_URL ||
+      procEnv.NEXT_PUBLIC_SUPABASE_URL ||
+      procEnv.SUPABASE_URL ||
+      (typeof window !== 'undefined' && window.localStorage?.getItem('insightiq_supabase_url')) ||
+      ''
+    ).trim();
+
+    const rawKey = (
+      env.VITE_SUPABASE_PUBLISHABLE_KEY ||
+      env.VITE_SUPABASE_ANON_KEY ||
+      env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
+      env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+      env.SUPABASE_PUBLISHABLE_KEY ||
+      env.SUPABASE_ANON_KEY ||
+      env.REACT_APP_SUPABASE_ANON_KEY ||
+      procEnv.VITE_SUPABASE_PUBLISHABLE_KEY ||
+      procEnv.VITE_SUPABASE_ANON_KEY ||
+      procEnv.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+      procEnv.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
+      procEnv.SUPABASE_ANON_KEY ||
+      (typeof window !== 'undefined' && window.localStorage?.getItem('insightiq_supabase_key')) ||
+      ''
+    ).trim();
+
+    // Guard against exposing service_role or backend secrets to browser
+    const key = (rawKey.startsWith('sb_secret_') || rawKey.includes('service_role')) ? '' : rawKey;
+
+    return { url, key };
+  };
+
+  const logSafeClientConfigCheck = (url, key) => {
+    const isUrlConfigured = Boolean(url && url.length > 5);
+    const isKeyConfigured = Boolean(key && key.length > 20);
+    console.log(`[InsightIQ AI] Safe Client Configuration Check: URL=${isUrlConfigured ? 'PRESENT' : 'MISSING'}, Key=${isKeyConfigured ? 'PRESENT' : 'MISSING'} (checked prefixes: VITE_*, NEXT_PUBLIC_*, SUPABASE_*)`);
+    if (!isUrlConfigured || !isKeyConfigured) {
+      console.warn('[InsightIQ AI] Supabase credentials are not fully configured. Please set Supabase URL and Publishable/Anon Key in .env.local.');
+    }
+  };
+
+  const initSupabaseClient = () => {
+    if (typeof window === 'undefined' || !window.supabase) return null;
+    const { url, key } = getSupabaseConfig();
+    logSafeClientConfigCheck(url, key);
+    if (!url || !key) return null;
+    try {
+      return window.supabase.createClient(url, key, {
         auth: {
           persistSession: true,
           autoRefreshToken: true,
           detectSessionInUrl: true,
           storageKey: 'insightiq_supabase_auth_token'
         }
-      })
-    : null;
+      });
+    } catch (e) {
+      console.error('[Supabase Init Error]', e);
+      return null;
+    }
+  };
+
+  let supabaseClient = initSupabaseClient();
+  const getSupabaseClient = () => {
+    if (!supabaseClient) supabaseClient = initSupabaseClient();
+    return supabaseClient;
+  };
+  if (typeof window !== 'undefined') {
+    window.supabaseClient = supabaseClient;
+    window.getSupabaseClient = getSupabaseClient;
+  }
 
   /* --------------------------------------------------------------------------
      Canonical Type Resolver & Parser Utilities
@@ -2719,9 +2710,7 @@ window.CANONICAL_PROJECTS = CANONICAL_PROJECTS;
   /* 1. DATA SCIENTIST DASHBOARD (overview) */
   function DataScientistDashboard({ userProfile, activeProject, activeDatasetDetails, onNavigate, models = [], projects = [], onSeedDemoData, onOpenUploadModal }) {
     const userFirstName = userProfile?.full_name ? userProfile.full_name.split(' ')[0] : 'Elena';
-    const proj = activeProject
-      || (projects && projects.length > 0 ? projects[0] : null)
-      || (typeof CANONICAL_PROJECTS !== 'undefined' && CANONICAL_PROJECTS.length > 0 ? CANONICAL_PROJECTS[0] : { name: 'Analytics Project', description: 'Upload a dataset to begin.', models: [] });
+    const proj = activeProject || (projects && projects.length > 0 ? projects[0] : null);
     // Dataset context: use actual activeDatasetDetails if available, otherwise try to find dataset from project name or show placeholder
     const dataset = activeDatasetDetails?.dataset || (activeProject && activeProject.datasetNames && activeProject.datasetNames[0] ? { name: activeProject.datasetNames[0], row_count: null, column_count: null } : (projects[0] && projects[0].datasetNames && projects[0].datasetNames[0] ? { name: projects[0].datasetNames[0], row_count: null, column_count: null } : null));
 
@@ -2745,7 +2734,7 @@ window.CANONICAL_PROJECTS = CANONICAL_PROJECTS;
         React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' } },
           React.createElement('button', { className: 'btn-secondary-action', onClick: () => onNavigate('projects'), style: { display: 'flex', alignItems: 'center', gap: 8 } },
             React.createElement(FolderIcon, { size: 16 }),
-            `Project: ${proj.name}`
+            proj ? `Project: ${proj.name}` : 'No Active Project'
           ),
           React.createElement('button', { className: 'btn-primary-action', onClick: () => onNavigate('models'), style: { display: 'flex', alignItems: 'center', gap: 8 } },
             React.createElement(CpuIcon, { size: 16 }),
@@ -2761,7 +2750,7 @@ window.CANONICAL_PROJECTS = CANONICAL_PROJECTS;
         ),
         React.createElement('div', { className: 'active-dataset-info' },
           React.createElement('div', { className: 'active-dataset-label' }, 'SHARED ENTERPRISE CONTEXT'),
-          React.createElement('div', { className: 'active-dataset-name' }, dataset ? `${proj.name} — ${dataset.name}` : `${proj.name} — No dataset connected`)
+          React.createElement('div', { className: 'active-dataset-name' }, proj ? (dataset ? `${proj.name} — ${dataset.name}` : `${proj.name} — No dataset connected`) : 'No active project selected')
         ),
         React.createElement('div', { className: 'active-dataset-metrics' },
           React.createElement('div', { className: 'dataset-stat-box' },
@@ -2790,7 +2779,7 @@ window.CANONICAL_PROJECTS = CANONICAL_PROJECTS;
           React.createElement('div', { className: 'kpi-value' }, `${activeModelsCount} Models`),
           React.createElement('div', { className: 'kpi-trend positive', style: { color: '#818CF8' } },
             React.createElement(SparklesIcon, { size: 14 }),
-            ' 99.8% Inference SLA'
+            activeModelsCount > 0 ? ' 99.8% Inference SLA' : ' No models active'
           ),
           React.createElement('div', { className: 'kpi-subtext' }, `${trainingModelsCount} in training • ${evaluatedModelsCount} in staging`)
         ),
@@ -2801,11 +2790,11 @@ window.CANONICAL_PROJECTS = CANONICAL_PROJECTS;
             React.createElement('div', { style: { color: '#38BDF8' } }, React.createElement(ActivityIcon, { size: 20 }))
           ),
           React.createElement('div', { className: 'kpi-value' }, activeModelsCount > 0 ? '14 ms' : '0 ms'),
-          React.createElement('div', { className: 'kpi-trend positive' },
+          React.createElement('div', { className: activeModelsCount > 0 ? 'kpi-trend positive' : 'kpi-trend', style: activeModelsCount === 0 ? { color: '#9CA3AF' } : undefined },
             React.createElement(TrendingUpIcon, { size: 14 }),
-            ' -12ms optimization'
+            activeModelsCount > 0 ? ' -12ms optimization' : ' No active endpoints'
           ),
-          React.createElement('div', { className: 'kpi-subtext' }, 'Edge compute endpoints')
+          React.createElement('div', { className: 'kpi-subtext' }, activeModelsCount > 0 ? 'Edge compute endpoints' : 'Inference endpoints idle')
         ),
 
         React.createElement('div', { className: 'kpi-card' },
@@ -2814,11 +2803,11 @@ window.CANONICAL_PROJECTS = CANONICAL_PROJECTS;
             React.createElement('div', { style: { color: '#34D399' } }, React.createElement(CheckCircleIcon, { size: 20 }))
           ),
           React.createElement('div', { className: 'kpi-value' }, activeModelsCount > 0 ? '0.005' : 'N/A'),
-          React.createElement('div', { className: 'kpi-trend positive' },
+          React.createElement('div', { className: activeModelsCount > 0 ? 'kpi-trend positive' : 'kpi-trend', style: activeModelsCount === 0 ? { color: '#9CA3AF' } : undefined },
             React.createElement(CheckCircleIcon, { size: 14 }),
-            ' Distribution Stable'
+            activeModelsCount > 0 ? ' Distribution Stable' : ' Baseline pending'
           ),
-          React.createElement('div', { className: 'kpi-subtext' }, 'Kolmogorov-Smirnov p > 0.05')
+          React.createElement('div', { className: 'kpi-subtext' }, activeModelsCount > 0 ? 'Kolmogorov-Smirnov p > 0.05' : 'Deploy model to monitor drift')
         ),
 
         React.createElement('div', { className: 'kpi-card' },
@@ -2827,11 +2816,11 @@ window.CANONICAL_PROJECTS = CANONICAL_PROJECTS;
             React.createElement('div', { style: { color: '#F472B6' } }, React.createElement(TrendingUpIcon, { size: 20 }))
           ),
           React.createElement('div', { className: 'kpi-value' }, activeModelsCount > 0 ? '0.042' : 'N/A'),
-          React.createElement('div', { className: 'kpi-trend positive' },
+          React.createElement('div', { className: activeModelsCount > 0 ? 'kpi-trend positive' : 'kpi-trend', style: activeModelsCount === 0 ? { color: '#9CA3AF' } : undefined },
             React.createElement(SparklesIcon, { size: 14 }),
-            ' 96.4% Accuracy'
+            activeModelsCount > 0 ? ' 96.4% Accuracy' : ' No training runs'
           ),
-          React.createElement('div', { className: 'kpi-subtext' }, 'Epoch 100 converged')
+          React.createElement('div', { className: 'kpi-subtext' }, activeModelsCount > 0 ? 'Epoch 100 converged' : 'Train algorithm in lab')
         )
       ),
 
@@ -2841,9 +2830,9 @@ window.CANONICAL_PROJECTS = CANONICAL_PROJECTS;
           React.createElement('div', { className: 'chart-header' },
             React.createElement('div', null,
               React.createElement('h3', { className: 'chart-title' }, 'ML Training Loss vs Validation Loss (100 Epochs)'),
-              React.createElement('p', { className: 'chart-subtitle' }, 'Model: XGBoost_Late_Delivery_Predictor_v3 — Learning Rate: 0.01')
+              React.createElement('p', { className: 'chart-subtitle' }, models.length > 0 ? `Active Model: ${models[0].name || models[0].model_name}` : 'Real-time training loss and validation convergence')
             ),
-            React.createElement('div', { style: { display: 'flex', gap: 16, fontSize: '0.75rem', fontWeight: 600 } },
+            models.length > 0 && React.createElement('div', { style: { display: 'flex', gap: 16, fontSize: '0.75rem', fontWeight: 600 } },
               React.createElement('span', { style: { color: '#38BDF8', display: 'flex', alignItems: 'center', gap: 6 } },
                 React.createElement('span', { style: { width: 12, height: 3, background: '#38BDF8', display: 'inline-block' } }),
                 'Train Loss'
@@ -2854,14 +2843,17 @@ window.CANONICAL_PROJECTS = CANONICAL_PROJECTS;
               )
             )
           ),
-          React.createElement('div', { style: { width: '100%', height: 220, position: 'relative', marginTop: 16 } },
+          models.length === 0 ? React.createElement('div', { style: { padding: '48px 16px', textAlign: 'center' } },
+            React.createElement(TrendingUpIcon, { size: 40, style: { color: '#818CF8', margin: '0 auto 12px', display: 'block' } }),
+            React.createElement('h4', { style: { color: '#FFF', fontSize: '1rem', fontWeight: 600, marginBottom: 6 } }, 'No Active Model Training Runs'),
+            React.createElement('p', { style: { color: '#9CA3AF', fontSize: '0.8125rem', maxWidth: 380, margin: '0 auto 16px', lineHeight: 1.5 } }, 'Train a supervised algorithm or forecast model from the Model Laboratory to view real-time loss convergence curves.'),
+            React.createElement('button', { className: 'btn-secondary-action', onClick: () => onNavigate('models') }, 'Open Model Laboratory →')
+          ) : React.createElement('div', { style: { width: '100%', height: 220, position: 'relative', marginTop: 16 } },
             React.createElement('svg', { width: '100%', height: '100%', viewBox: '0 0 600 200', fill: 'none' },
-              // Grid Lines
               React.createElement('line', { x1: 40, y1: 20, x2: 580, y2: 20, stroke: 'rgba(255,255,255,0.06)', strokeDasharray: '4 4' }),
               React.createElement('line', { x1: 40, y1: 70, x2: 580, y2: 70, stroke: 'rgba(255,255,255,0.06)', strokeDasharray: '4 4' }),
               React.createElement('line', { x1: 40, y1: 120, x2: 580, y2: 120, stroke: 'rgba(255,255,255,0.06)', strokeDasharray: '4 4' }),
               React.createElement('line', { x1: 40, y1: 170, x2: 580, y2: 170, stroke: 'rgba(255,255,255,0.1)' }),
-              // Axis Labels
               React.createElement('text', { x: 10, y: 25, fill: '#9CA3AF', fontSize: 10 }, '1.0'),
               React.createElement('text', { x: 10, y: 75, fill: '#9CA3AF', fontSize: 10 }, '0.5'),
               React.createElement('text', { x: 10, y: 125, fill: '#9CA3AF', fontSize: 10 }, '0.2'),
@@ -2869,26 +2861,10 @@ window.CANONICAL_PROJECTS = CANONICAL_PROJECTS;
               React.createElement('text', { x: 40, y: 195, fill: '#9CA3AF', fontSize: 10 }, 'Epoch 0'),
               React.createElement('text', { x: 300, y: 195, fill: '#9CA3AF', fontSize: 10 }, 'Epoch 50'),
               React.createElement('text', { x: 540, y: 195, fill: '#9CA3AF', fontSize: 10 }, 'Epoch 100'),
-              // Train Curve (Cyan)
-              React.createElement('path', {
-                d: 'M 40 40 Q 120 120, 220 145 T 400 162 T 580 168',
-                fill: 'none',
-                stroke: '#38BDF8',
-                strokeWidth: 3,
-                strokeLinecap: 'round'
-              }),
-              // Val Curve (Purple)
-              React.createElement('path', {
-                d: 'M 40 55 Q 120 130, 220 152 T 400 166 T 580 170',
-                fill: 'none',
-                stroke: '#818CF8',
-                strokeWidth: 3,
-                strokeDasharray: '6 3',
-                strokeLinecap: 'round'
-              }),
-              // Convergence Marker
+              React.createElement('path', { d: 'M 40 40 Q 120 120, 220 145 T 400 162 T 580 168', fill: 'none', stroke: '#38BDF8', strokeWidth: 3, strokeLinecap: 'round' }),
+              React.createElement('path', { d: 'M 40 55 Q 120 130, 220 152 T 400 166 T 580 170', fill: 'none', stroke: '#818CF8', strokeWidth: 3, strokeDasharray: '6 3', strokeLinecap: 'round' }),
               React.createElement('circle', { cx: 480, cy: 165, r: 5, fill: '#34D399' }),
-              React.createElement('text', { x: 440, y: 150, fill: '#34D399', fontSize: 10, fontWeight: 'bold' }, 'Converged (MAE 0.042)')
+              React.createElement('text', { x: 440, y: 150, fill: '#34D399', fontSize: 10, fontWeight: 'bold' }, 'Converged')
             )
           )
         ),
@@ -2897,25 +2873,30 @@ window.CANONICAL_PROJECTS = CANONICAL_PROJECTS;
         React.createElement('div', { className: 'chart-container', style: { background: '#111827', borderRadius: 16, padding: 24 } },
           React.createElement('h3', { className: 'chart-title' }, 'Feature Store Ingestion Matrix'),
           React.createElement('p', { className: 'chart-subtitle' }, 'Automated schema encoding and scaling pipeline'),
-          React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: 12, marginTop: 16 } },
+          !dataset ? React.createElement('div', { style: { padding: '48px 16px', textAlign: 'center' } },
+            React.createElement(DatabaseIcon, { size: 40, style: { color: '#38BDF8', margin: '0 auto 12px', display: 'block' } }),
+            React.createElement('h4', { style: { color: '#FFF', fontSize: '1rem', fontWeight: 600, marginBottom: 6 } }, 'No Feature Store Connected'),
+            React.createElement('p', { style: { color: '#9CA3AF', fontSize: '0.8125rem', maxWidth: 380, margin: '0 auto 16px', lineHeight: 1.5 } }, 'Connect a project dataset to extract normalized numeric, categorical embeddings, and temporal lags.'),
+            React.createElement('button', { className: 'btn-secondary-action', onClick: () => onNavigate('datasets') }, 'Go to Data Catalog →')
+          ) : React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: 12, marginTop: 16 } },
             React.createElement('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', background: 'rgba(255,255,255,0.02)', borderRadius: 10, border: '1px solid rgba(255,255,255,0.06)' } },
               React.createElement('div', null,
-                React.createElement('div', { style: { color: '#FFF', fontWeight: 600, fontSize: '0.875rem' } }, '22 Normalized Numerics'),
+                React.createElement('div', { style: { color: '#FFF', fontWeight: 600, fontSize: '0.875rem' } }, 'Normalized Numeric Features'),
                 React.createElement('div', { style: { color: '#9CA3AF', fontSize: '0.75rem' } }, 'RobustScaler applied (Outlier resilient)')
               ),
               React.createElement('span', { className: 'action-capability-pill action-capability-available' }, 'VERIFIED')
             ),
             React.createElement('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', background: 'rgba(255,255,255,0.02)', borderRadius: 10, border: '1px solid rgba(255,255,255,0.06)' } },
               React.createElement('div', null,
-                React.createElement('div', { style: { color: '#FFF', fontWeight: 600, fontSize: '0.875rem' } }, '23 Categorical Embeddings'),
+                React.createElement('div', { style: { color: '#FFF', fontWeight: 600, fontSize: '0.875rem' } }, 'Categorical Embeddings'),
                 React.createElement('div', { style: { color: '#9CA3AF', fontSize: '0.75rem' } }, 'Target encoding & One-Hot mapped')
               ),
               React.createElement('span', { className: 'action-capability-pill action-capability-available' }, 'VERIFIED')
             ),
             React.createElement('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', background: 'rgba(255,255,255,0.02)', borderRadius: 10, border: '1px solid rgba(255,255,255,0.06)' } },
               React.createElement('div', null,
-                React.createElement('div', { style: { color: '#FFF', fontWeight: 600, fontSize: '0.875rem' } }, '2 Date/Time Temporal Lags'),
-                React.createElement('div', { style: { color: '#9CA3AF', fontSize: '0.75rem' } }, 'Order date + Shipping date indices')
+                React.createElement('div', { style: { color: '#FFF', fontWeight: 600, fontSize: '0.875rem' } }, 'Temporal Indices & Lags'),
+                React.createElement('div', { style: { color: '#9CA3AF', fontSize: '0.75rem' } }, 'Temporal sequencing validated')
               ),
               React.createElement('span', { className: 'action-capability-pill action-capability-available' }, 'VERIFIED')
             )
@@ -2927,7 +2908,7 @@ window.CANONICAL_PROJECTS = CANONICAL_PROJECTS;
       React.createElement('div', { className: 'chart-container', style: { background: '#111827', borderRadius: 16, padding: 24 } },
         React.createElement('div', { className: 'chart-header' },
           React.createElement('div', null,
-            React.createElement('h3', { className: 'chart-title' }, `Active ML Pipelines — ${proj.name}`),
+            React.createElement('h3', { className: 'chart-title' }, `Active ML Pipelines — ${proj ? proj.name : 'Workspace'}`),
             React.createElement('p', { className: 'chart-subtitle' }, 'Production inference endpoints and training experiments')
           ),
           React.createElement('button', { className: 'btn-secondary-action', onClick: () => onNavigate('models') }, 'View All Models')
@@ -2945,14 +2926,18 @@ window.CANONICAL_PROJECTS = CANONICAL_PROJECTS;
               )
             ),
             React.createElement('tbody', null,
-              (proj.models || models || []).map(m =>
+              (models.length === 0) ? React.createElement('tr', null,
+                React.createElement('td', { colSpan: 6, style: { padding: '36px 16px', textAlign: 'center', color: '#9CA3AF' } },
+                  'No ML models registered in this workspace. Register or train a model in the Model Laboratory to track versioning, metrics, and latency.'
+                )
+              ) : models.map(m =>
                 React.createElement('tr', { key: m.id, style: { borderBottom: '1px solid rgba(255,255,255,0.04)', color: '#FFF' } },
-                  React.createElement('td', { style: { padding: '12px 16px', fontWeight: 600, color: '#38BDF8' } }, m.name),
-                  React.createElement('td', { style: { padding: '12px 16px' } }, m.type),
-                  React.createElement('td', { style: { padding: '12px 16px', fontWeight: 700, color: '#34D399' } }, m.accuracy),
-                  React.createElement('td', { style: { padding: '12px 16px' } }, m.latency),
+                  React.createElement('td', { style: { padding: '12px 16px', fontWeight: 600, color: '#38BDF8' } }, m.name || m.model_name),
+                  React.createElement('td', { style: { padding: '12px 16px' } }, m.type || m.algorithm || 'Custom Pipeline'),
+                  React.createElement('td', { style: { padding: '12px 16px', fontWeight: 700, color: '#34D399' } }, m.accuracy || m.roc_auc || m.r2_score || 'N/A'),
+                  React.createElement('td', { style: { padding: '12px 16px' } }, m.latency || 'N/A'),
                   React.createElement('td', { style: { padding: '12px 16px' } },
-                    React.createElement('span', { className: 'action-capability-pill action-capability-available' }, m.status)
+                    React.createElement('span', { className: 'action-capability-pill action-capability-available' }, m.status || 'Draft')
                   ),
                   React.createElement('td', { style: { padding: '12px 16px', textAlign: 'right' } },
                     React.createElement('button', { className: 'btn-secondary-action', onClick: () => onNavigate('models'), style: { padding: '4px 10px', fontSize: '0.75rem' } }, 'Inspect')
@@ -3007,8 +2992,8 @@ window.CANONICAL_PROJECTS = CANONICAL_PROJECTS;
   /* 2. PROJECT MANAGER DASHBOARD (overview) */
   function ProjectManagerDashboard({ userProfile, projects, activeProject, onNavigate, onSelectProject }) {
     const userFirstName = userProfile?.full_name ? userProfile.full_name.split(' ')[0] : 'Marcus';
-    const allProjects = projects || CANONICAL_PROJECTS;
-    const proj = activeProject || allProjects[0];
+    const allProjects = (projects && projects.length > 0) ? projects : [];
+    const proj = activeProject || allProjects[0] || null;
 
     return React.createElement('div', { className: 'animate-fade-in', style: { display: 'flex', flexDirection: 'column', gap: 24 } },
       // Top Header
@@ -3042,12 +3027,12 @@ window.CANONICAL_PROJECTS = CANONICAL_PROJECTS;
             React.createElement('span', { className: 'kpi-title' }, 'PORTFOLIO HEALTH SCORE'),
             React.createElement('div', { style: { color: '#34D399' } }, React.createElement(CheckCircleIcon, { size: 20 }))
           ),
-          React.createElement('div', { className: 'kpi-value' }, '96.4%'),
-          React.createElement('div', { className: 'kpi-trend positive' },
+          React.createElement('div', { className: 'kpi-value' }, allProjects.length > 0 ? '96.4%' : 'N/A'),
+          React.createElement('div', { className: allProjects.length > 0 ? 'kpi-trend positive' : 'kpi-trend', style: allProjects.length === 0 ? { color: '#9CA3AF' } : undefined },
             React.createElement(CheckCircleIcon, { size: 14 }),
-            ' All 3 Projects Green/Amber'
+            allProjects.length > 0 ? ` ${allProjects.length} Projects Tracked` : ' No projects active'
           ),
-          React.createElement('div', { className: 'kpi-subtext' }, 'Composite SLA index')
+          React.createElement('div', { className: 'kpi-subtext' }, allProjects.length > 0 ? 'Composite SLA index' : 'Create project to track SLA')
         ),
 
         React.createElement('div', { className: 'kpi-card' },
@@ -3055,12 +3040,12 @@ window.CANONICAL_PROJECTS = CANONICAL_PROJECTS;
             React.createElement('span', { className: 'kpi-title' }, 'MILESTONES DELIVERED'),
             React.createElement('div', { style: { color: '#38BDF8' } }, React.createElement(TrendingUpIcon, { size: 20 }))
           ),
-          React.createElement('div', { className: 'kpi-value' }, '15 / 18'),
-          React.createElement('div', { className: 'kpi-trend positive' },
+          React.createElement('div', { className: 'kpi-value' }, allProjects.length > 0 ? '15 / 18' : '0 / 0'),
+          React.createElement('div', { className: allProjects.length > 0 ? 'kpi-trend positive' : 'kpi-trend', style: allProjects.length === 0 ? { color: '#9CA3AF' } : undefined },
             React.createElement(SparklesIcon, { size: 14 }),
-            ' 83.3% SLA Completion'
+            allProjects.length > 0 ? ' 83.3% SLA Completion' : ' 0 active milestones'
           ),
-          React.createElement('div', { className: 'kpi-subtext' }, '3 milestones in active sprint')
+          React.createElement('div', { className: 'kpi-subtext' }, allProjects.length > 0 ? 'Milestones in active sprint' : 'No milestones scheduled')
         ),
 
         React.createElement('div', { className: 'kpi-card' },
@@ -3068,12 +3053,12 @@ window.CANONICAL_PROJECTS = CANONICAL_PROJECTS;
             React.createElement('span', { className: 'kpi-title' }, 'BUDGET BURN EFFICIENCY'),
             React.createElement('div', { style: { color: '#818CF8' } }, React.createElement(ActivityIcon, { size: 20 }))
           ),
-          React.createElement('div', { className: 'kpi-value' }, '72% Burn'),
-          React.createElement('div', { className: 'kpi-trend positive' },
+          React.createElement('div', { className: 'kpi-value' }, allProjects.length > 0 ? '72% Burn' : '0% Burn'),
+          React.createElement('div', { className: allProjects.length > 0 ? 'kpi-trend positive' : 'kpi-trend', style: allProjects.length === 0 ? { color: '#9CA3AF' } : undefined },
             React.createElement(TrendingUpIcon, { size: 14 }),
-            ' $184K Under Budget'
+            allProjects.length > 0 ? ' $184K Under Budget' : ' $0 allocated'
           ),
-          React.createElement('div', { className: 'kpi-subtext' }, 'Cloud spend & resource allocation')
+          React.createElement('div', { className: 'kpi-subtext' }, allProjects.length > 0 ? 'Cloud spend & resource allocation' : 'Resource budget unallocated')
         ),
 
         React.createElement('div', { className: 'kpi-card' },
@@ -3081,12 +3066,12 @@ window.CANONICAL_PROJECTS = CANONICAL_PROJECTS;
             React.createElement('span', { className: 'kpi-title' }, 'IDENTIFIED RISKS'),
             React.createElement('div', { style: { color: '#FBBF24' } }, React.createElement(AlertCircleIcon, { size: 20 }))
           ),
-          React.createElement('div', { className: 'kpi-value' }, '1 Critical / 2 Mod'),
-          React.createElement('div', { className: 'kpi-trend', style: { color: '#FBBF24' } },
-            React.createElement(AlertCircleIcon, { size: 14 }),
-            ' Active Mitigations Logged'
+          React.createElement('div', { className: 'kpi-value' }, allProjects.length > 0 ? '1 Critical / 2 Mod' : '0 Risks'),
+          React.createElement('div', { className: 'kpi-trend', style: { color: allProjects.length > 0 ? '#FBBF24' : '#34D399' } },
+            React.createElement(CheckCircleIcon, { size: 14 }),
+            allProjects.length > 0 ? ' Active Mitigations Logged' : ' No SLA blockers'
           ),
-          React.createElement('div', { className: 'kpi-subtext' }, 'No SLA blocker unaddressed')
+          React.createElement('div', { className: 'kpi-subtext' }, allProjects.length > 0 ? 'Risk register synchronized' : 'All systems clear')
         )
       ),
 
@@ -3096,12 +3081,17 @@ window.CANONICAL_PROJECTS = CANONICAL_PROJECTS;
           React.createElement('h2', { style: { fontSize: '1.25rem', fontWeight: 700, color: '#FFF', margin: 0 } }, 'Enterprise Project Portfolio'),
           React.createElement('span', { style: { fontSize: '0.8125rem', color: '#9CA3AF' } }, `Showing ${allProjects.length} Active Enterprise Initiatives`)
         ),
-        React.createElement('div', { className: 'projects-grid' },
+        allProjects.length === 0 ? React.createElement('div', { className: 'empty-state-card', style: { padding: '56px 24px', textAlign: 'center', background: '#111827', borderRadius: 16, border: '1px dashed rgba(255,255,255,0.1)' } },
+          React.createElement(FolderIcon, { size: 44, color: '#38BDF8', style: { margin: '0 auto 16px', display: 'block' } }),
+          React.createElement('h3', { style: { color: '#FFF', fontSize: '1.25rem', fontWeight: 700, marginBottom: 8 } }, 'No Active Enterprise Projects'),
+          React.createElement('p', { style: { color: '#9CA3AF', fontSize: '0.875rem', maxWidth: 460, margin: '0 auto 20px', lineHeight: 1.6 } }, 'Create your first collaborative project or upload a dataset to begin tracking portfolio milestones, resource velocity, and business ROI.'),
+          React.createElement('button', { className: 'btn-primary-action', onClick: () => onNavigate('projects') }, '+ Create Project')
+        ) : React.createElement('div', { className: 'projects-grid' },
           allProjects.map(p => {
             const pProg = calculateProjectProgress(p);
             return React.createElement('div', {
               key: p.id,
-              className: `project-card-v2 ${p.id === proj.id ? 'active-project' : ''}`,
+              className: `project-card-v2 ${p.id === proj?.id ? 'active-project' : ''}`,
               onClick: () => { onSelectProject(p.id); onNavigate('projects'); }
             },
               React.createElement('div', { className: 'project-card-top' },
@@ -3141,7 +3131,7 @@ window.CANONICAL_PROJECTS = CANONICAL_PROJECTS;
                 ),
                 React.createElement('span', { style: { fontSize: '0.75rem', fontWeight: 600, color: '#38BDF8' } }, 'Open Workspace →')
               )
-            )
+            );
           })
         )
       ),
@@ -3157,7 +3147,9 @@ window.CANONICAL_PROJECTS = CANONICAL_PROJECTS;
             )
           ),
           React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: 10, marginTop: 16 } },
-            (proj?.milestones || []).map(m =>
+            (!proj || !proj.milestones || proj.milestones.length === 0) ? React.createElement('div', { style: { padding: '36px 16px', textAlign: 'center', color: '#9CA3AF', fontSize: '0.84375rem' } },
+              'No milestones logged for this workspace. Define project deliverables to track completion timelines.'
+            ) : proj.milestones.map(m =>
               React.createElement('div', { key: m.id, className: 'pm-milestone-card' },
                 React.createElement('div', { style: { flex: 1 } },
                   React.createElement('div', { style: { color: '#FFF', fontWeight: 600, fontSize: '0.875rem' } }, m.title),
@@ -3172,7 +3164,7 @@ window.CANONICAL_PROJECTS = CANONICAL_PROJECTS;
                 )
               )
             )
-          )
+          ),
         ),
 
         // Risk & Issue Register
@@ -3184,7 +3176,9 @@ window.CANONICAL_PROJECTS = CANONICAL_PROJECTS;
             )
           ),
           React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: 12, marginTop: 16 } },
-            (proj?.risks || []).map(r =>
+            (!proj || !proj.risks || proj.risks.length === 0) ? React.createElement('div', { style: { padding: '36px 16px', textAlign: 'center', color: '#9CA3AF', fontSize: '0.84375rem' } },
+              'No risks or issues identified. All system health indicators are clear.'
+            ) : proj.risks.map(r =>
               React.createElement('div', { key: r.id, style: { padding: '12px 16px', background: 'rgba(255,255,255,0.02)', borderRadius: 10, border: '1px solid rgba(255,255,255,0.06)' } },
                 React.createElement('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 } },
                   React.createElement('span', { style: { fontWeight: 600, color: '#FFF', fontSize: '0.875rem' } }, r.title),
@@ -3194,7 +3188,7 @@ window.CANONICAL_PROJECTS = CANONICAL_PROJECTS;
                 React.createElement('div', { style: { fontSize: '0.75rem', color: '#9CA3AF' } }, `Owner: ${r.owner} • Status: ${r.status}`)
               )
             )
-          )
+          ),
         )
       )
     );
@@ -3203,7 +3197,7 @@ window.CANONICAL_PROJECTS = CANONICAL_PROJECTS;
   /* 3. ADMINISTRATOR DASHBOARD (overview) */
   function AdminDashboard({ userProfile, projects, activeDatasetDetails, onNavigate }) {
     const userFirstName = userProfile?.full_name ? userProfile.full_name.split(' ')[0] : 'Sarah';
-    const allProjects = projects || CANONICAL_PROJECTS;
+    const allProjects = (projects && projects.length > 0) ? projects : [];
 
     return React.createElement('div', { className: 'animate-fade-in', style: { display: 'flex', flexDirection: 'column', gap: 24 } },
       // Top Header
@@ -3237,10 +3231,10 @@ window.CANONICAL_PROJECTS = CANONICAL_PROJECTS;
             React.createElement('span', { className: 'kpi-title' }, 'ACTIVE USER SESSIONS'),
             React.createElement('div', { style: { color: '#F472B6' } }, React.createElement(UserIcon, { size: 20 }))
           ),
-          React.createElement('div', { className: 'kpi-value' }, '24 Active'),
+          React.createElement('div', { className: 'kpi-value' }, userProfile ? '1 Active' : '0 Active'),
           React.createElement('div', { className: 'kpi-trend positive' },
             React.createElement(ActivityIcon, { size: 14 }),
-            ' +6 Peak Concurrency'
+            ' Authenticated Session'
           ),
           React.createElement('div', { className: 'kpi-subtext' }, 'Supabase Auth synchronized')
         ),
@@ -3253,7 +3247,7 @@ window.CANONICAL_PROJECTS = CANONICAL_PROJECTS;
           React.createElement('div', { className: 'kpi-value' }, `${allProjects.length} Projects`),
           React.createElement('div', { className: 'kpi-trend positive' },
             React.createElement(DatabaseIcon, { size: 14 }),
-            ' 180,519 Records Ingested'
+            allProjects.length > 0 ? ' Records Ingested' : ' 0 Records Ingested'
           ),
           React.createElement('div', { className: 'kpi-subtext' }, 'Shared enterprise storage')
         ),
@@ -3276,7 +3270,7 @@ window.CANONICAL_PROJECTS = CANONICAL_PROJECTS;
             React.createElement('span', { className: 'kpi-title' }, 'SECURITY AUDIT EVENTS'),
             React.createElement('div', { style: { color: '#34D399' } }, React.createElement(LockIcon, { size: 20 }))
           ),
-          React.createElement('div', { className: 'kpi-value' }, '1,420 Logged'),
+          React.createElement('div', { className: 'kpi-value' }, '0 Logged'),
           React.createElement('div', { className: 'kpi-trend positive' },
             React.createElement(CheckCircleIcon, { size: 14 }),
             ' 0 Security Breaches'
@@ -3293,28 +3287,28 @@ window.CANONICAL_PROJECTS = CANONICAL_PROJECTS;
           React.createElement('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12, marginTop: 16 } },
             React.createElement('div', { className: 'admin-rbac-role-card' },
               React.createElement('div', null,
-                React.createElement('div', { style: { color: '#38BDF8', fontWeight: 700, fontSize: '1.25rem' } }, '8'),
+                React.createElement('div', { style: { color: '#38BDF8', fontWeight: 700, fontSize: '1.25rem' } }, userProfile?.role === 'data_analyst' ? '1' : '0'),
                 React.createElement('div', { style: { color: '#FFF', fontWeight: 600, fontSize: '0.8125rem' } }, 'Data Analysts')
               ),
               React.createElement('span', { className: 'action-capability-pill action-capability-available' }, 'ACTIVE')
             ),
             React.createElement('div', { className: 'admin-rbac-role-card' },
               React.createElement('div', null,
-                React.createElement('div', { style: { color: '#818CF8', fontWeight: 700, fontSize: '1.25rem' } }, '6'),
+                React.createElement('div', { style: { color: '#818CF8', fontWeight: 700, fontSize: '1.25rem' } }, userProfile?.role === 'data_scientist' ? '1' : '0'),
                 React.createElement('div', { style: { color: '#FFF', fontWeight: 600, fontSize: '0.8125rem' } }, 'Data Scientists')
               ),
               React.createElement('span', { className: 'action-capability-pill action-capability-available' }, 'ACTIVE')
             ),
             React.createElement('div', { className: 'admin-rbac-role-card' },
               React.createElement('div', null,
-                React.createElement('div', { style: { color: '#34D399', fontWeight: 700, fontSize: '1.25rem' } }, '4'),
+                React.createElement('div', { style: { color: '#34D399', fontWeight: 700, fontSize: '1.25rem' } }, userProfile?.role === 'project_manager' ? '1' : '0'),
                 React.createElement('div', { style: { color: '#FFF', fontWeight: 600, fontSize: '0.8125rem' } }, 'Project Managers')
               ),
               React.createElement('span', { className: 'action-capability-pill action-capability-available' }, 'ACTIVE')
             ),
             React.createElement('div', { className: 'admin-rbac-role-card' },
               React.createElement('div', null,
-                React.createElement('div', { style: { color: '#F472B6', fontWeight: 700, fontSize: '1.25rem' } }, '2'),
+                React.createElement('div', { style: { color: '#F472B6', fontWeight: 700, fontSize: '1.25rem' } }, userProfile?.role === 'admin' ? '1' : '0'),
                 React.createElement('div', { style: { color: '#FFF', fontWeight: 600, fontSize: '0.8125rem' } }, 'Administrators')
               ),
               React.createElement('span', { className: 'action-capability-pill action-capability-available' }, 'SUPER')
@@ -3337,7 +3331,7 @@ window.CANONICAL_PROJECTS = CANONICAL_PROJECTS;
             React.createElement('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', background: 'rgba(255,255,255,0.02)', borderRadius: 10, border: '1px solid rgba(255,255,255,0.06)' } },
               React.createElement('div', null,
                 React.createElement('div', { style: { color: '#FFF', fontWeight: 600, fontSize: '0.875rem' } }, 'IndexedDB In-Browser Data Store'),
-                React.createElement('div', { style: { color: '#9CA3AF', fontSize: '0.75rem' } }, '17.55 MB Cached • 180,519 Rows')
+                React.createElement('div', { style: { color: '#9CA3AF', fontSize: '0.75rem' } }, activeDatasetDetails?.dataset?.row_count ? `${(activeDatasetDetails.dataset.row_count).toLocaleString()} Rows Cached` : '0 B Cached • 0 Rows')
               ),
               React.createElement('span', { className: 'action-capability-pill action-capability-available' }, 'ONLINE')
             ),
@@ -3373,21 +3367,9 @@ window.CANONICAL_PROJECTS = CANONICAL_PROJECTS;
               )
             ),
             React.createElement('tbody', null,
-              [
-                { time: '2 mins ago', type: 'AUTH_USER_LOGIN', user: 'alex.rivera@insightiq.ai', target: 'Session Token #9412', status: 'Success' },
-                { time: '14 mins ago', type: 'DATASET_SCHEMA_VERIFY', user: 'alex.rivera@insightiq.ai', target: 'DataCoSupplyChainDataset', status: 'Verified' },
-                { time: '1 hr ago', type: 'ML_MODEL_PROMOTION', user: 'elena.rostova@insightiq.ai', target: 'XGBoost_Late_Delivery_v3', status: 'Approved' },
-                { time: '2 hrs ago', type: 'RBAC_PERMISSION_AUDIT', user: 'system_daemon', target: 'All Scopes Validated', status: 'Pass' },
-                { time: '1 day ago', type: 'API_KEY_ROTATION', user: 'sarah.chen@insightiq.ai', target: 'Gemini 2.5 Flash Key', status: 'Renewed' }
-              ].map((ev, idx) =>
-                React.createElement('tr', { key: idx, style: { borderBottom: '1px solid rgba(255,255,255,0.04)', color: '#FFF' } },
-                  React.createElement('td', { style: { padding: '12px 16px', color: '#9CA3AF' } }, ev.time),
-                  React.createElement('td', { style: { padding: '12px 16px', fontWeight: 600, color: '#38BDF8' } }, ev.type),
-                  React.createElement('td', { style: { padding: '12px 16px' } }, ev.user),
-                  React.createElement('td', { style: { padding: '12px 16px', color: '#9CA3AF' } }, ev.target),
-                  React.createElement('td', { style: { padding: '12px 16px' } },
-                    React.createElement('span', { className: 'action-capability-pill action-capability-available' }, ev.status)
-                  )
+              React.createElement('tr', null,
+                React.createElement('td', { colSpan: 5, style: { padding: '32px 16px', textAlign: 'center', color: '#9CA3AF' } },
+                  'No administrative audit events recorded yet.'
                 )
               )
             )
@@ -3415,8 +3397,8 @@ window.CANONICAL_PROJECTS = CANONICAL_PROJECTS;
     onPreviewReport,
     isReportGenerating
   }) {
-    // Compute allProjects BEFORE any early return — fall back to CANONICAL_PROJECTS when userProjects is empty
-    const allProjects = (projects && projects.length > 0) ? projects : CANONICAL_PROJECTS;
+    // Compute allProjects — clean workspace defaults to empty array
+    const allProjects = (projects && projects.length > 0) ? projects : [];
 
     const [selectedProjectId, setSelectedProjectId] = React.useState(activeProjectId || allProjects[0]?.id);
     const [isDetailViewOpen, setIsDetailViewOpen] = React.useState(false);
@@ -3436,11 +3418,7 @@ window.CANONICAL_PROJECTS = CANONICAL_PROJECTS;
             React.createElement('p', { style: { fontSize: '0.875rem', color: '#9CA3AF', marginTop: 4 } }, 'Collaborative business initiatives, dataset linkages, models, and milestone tracking.')
           ),
           React.createElement('div', { style: { display: 'flex', gap: 10 } },
-            onSeedDemoData && React.createElement('button', {
-              type: 'button',
-              className: 'btn-secondary-action',
-              onClick: onSeedDemoData
-            }, '🧪 Load Demo Projects'),
+            
             onOpenCreateProjectModal && React.createElement('button', {
               type: 'button',
               className: 'btn-primary-action',
@@ -3462,11 +3440,7 @@ window.CANONICAL_PROJECTS = CANONICAL_PROJECTS;
               className: 'btn-primary-action',
               onClick: onOpenCreateProjectModal
             }, '+ Create Project'),
-            onSeedDemoData && React.createElement('button', {
-              type: 'button',
-              className: 'btn-secondary-action',
-              onClick: onSeedDemoData
-            }, '🧪 Load Demo Projects')
+            
           )
         )
       );
@@ -4973,6 +4947,39 @@ window.CANONICAL_PROJECTS = CANONICAL_PROJECTS;
     );
   }
 
+  /* Production Workspace Sanitizer: Purge legacy seeded demo keys from browser storage */
+  (function sanitizeLegacyDemoStorage() {
+    try {
+      if (typeof window === 'undefined' || !window.localStorage) return;
+      const cleanJsonList = (key, predicate) => {
+        const item = localStorage.getItem(key);
+        if (item) {
+          try {
+            const parsed = JSON.parse(item);
+            if (Array.isArray(parsed)) {
+              const clean = parsed.filter(predicate);
+              if (clean.length !== parsed.length) {
+                localStorage.setItem(key, JSON.stringify(clean));
+              }
+            }
+          } catch (e) {}
+        }
+      };
+      cleanJsonList('insightiq_user_projects', p => !p.is_demo && !String(p.id).startsWith('proj-supply-chain') && !String(p.id).startsWith('proj-customer') && !String(p.id).startsWith('proj-financial'));
+      cleanJsonList('insightiq_user_datasets', d => !d.is_demo && !String(d.id).startsWith('dataco-') && !String(d.id).startsWith('demo-'));
+      cleanJsonList('insightiq_user_models', m => !m.is_demo && !String(m.id).startsWith('mod-demo'));
+      cleanJsonList('insightiq_reports_store', r => !String(r.id).startsWith('rpt-demo'));
+      const activePid = localStorage.getItem('insightiq_active_project_id');
+      if (activePid && (activePid.startsWith('proj-supply-chain') || activePid.startsWith('proj-customer') || activePid.startsWith('proj-financial'))) {
+        localStorage.removeItem('insightiq_active_project_id');
+      }
+      const activeDid = localStorage.getItem('insightiq_active_dataset_id');
+      if (activeDid && (activeDid.startsWith('dataco-') || activeDid.startsWith('demo-'))) {
+        localStorage.removeItem('insightiq_active_dataset_id');
+      }
+    } catch (e) {}
+  })();
+
   function ProductionApp() {
     /* Real Auth Session State with Instant Hydration */
     const [session, setSession] = React.useState(() => {
@@ -5048,13 +5055,54 @@ window.CANONICAL_PROJECTS = CANONICAL_PROJECTS;
     });
     const [splashIndex, setSplashIndex] = React.useState(0);
     const [progress, setProgress] = React.useState(0);
-    const [needsRoleSelection, setNeedsRoleSelection] = React.useState(false);
+    const [needsRoleSelection, setNeedsRoleSelection] = React.useState(() => {
+      try {
+        const savedSession = localStorage.getItem('insightiq_user_session');
+        if (!savedSession) return false;
+        const savedProfile = localStorage.getItem('insightiq_user_profile');
+        if (savedProfile) {
+          const p = JSON.parse(savedProfile);
+          return !p?.role || !isValidWorkspaceRole(p.role);
+        }
+        return true;
+      } catch (e) {
+        return false;
+      }
+    });
     const [selectedRoleOption, setSelectedRoleOption] = React.useState('Data Scientist');
     const [isSavingRole, setIsSavingRole] = React.useState(false);
+    const [saveRoleError, setSaveRoleError] = React.useState(null);
+    const [isProfileLoading, setIsProfileLoading] = React.useState(false);
+    const [profileLoadError, setProfileLoadError] = React.useState(null);
+
+    /* Switch Workspace Role Modal States */
+    const [isSwitchRoleModalOpen, setIsSwitchRoleModalOpen] = React.useState(false);
+    const [selectedSwitchRole, setSelectedSwitchRole] = React.useState('Data Analyst');
+    const [isSwitchingRole, setIsSwitchingRole] = React.useState(false);
+    const [switchRoleError, setSwitchRoleError] = React.useState(null);
+    const [roleToastMessage, setRoleToastMessage] = React.useState(null);
+
     const [systemCurrency, setSystemCurrency] = React.useState('USD');
     const [showKpiDebugPanel, setShowKpiDebugPanel] = React.useState(false);
     const [isDraggingOver, setIsDraggingOver] = React.useState(false);
     const fileInputRef = React.useRef(null);
+
+    /* Sync effectiveRole with userProfile in dev */
+    React.useEffect(() => {
+      if (userProfile?.role && isDev) {
+        const canonical = getCanonicalRole(userProfile.role);
+        setDevPreviewRole(canonical);
+        try { localStorage.setItem('insightiq_dev_preview_role', canonical); } catch (e) {}
+      }
+    }, [userProfile?.role, isDev]);
+
+    /* Auto-dismiss floating toast after 4s */
+    React.useEffect(() => {
+      if (roleToastMessage) {
+        const timer = setTimeout(() => setRoleToastMessage(null), 4000);
+        return () => clearTimeout(timer);
+      }
+    }, [roleToastMessage]);
 
     React.useEffect(() => {
       window.__insightIQTest = {
@@ -5062,14 +5110,59 @@ window.CANONICAL_PROJECTS = CANONICAL_PROJECTS;
           setSession({ user: { id: '00000000-0000-4000-a000-000000000001', email: 'test@insightiq.ai' } });
           setUserProfile({ id: '00000000-0000-4000-a000-000000000001', email: 'test@insightiq.ai', full_name: 'Alex Rivera', role: null });
           setNeedsRoleSelection(true);
+          setIsProfileLoading(false);
+          setProfileLoadError(null);
           setShowSplash(false);
         },
+        triggerProfileLoading: () => {
+          setIsProfileLoading(true);
+          setNeedsRoleSelection(false);
+          setProfileLoadError(null);
+        },
+        triggerProfileError: (msg = 'Database connection failure') => {
+          setIsProfileLoading(false);
+          setProfileLoadError(msg);
+          setNeedsRoleSelection(false);
+        },
+        isRoleChooserVisible: () => Boolean(document.querySelector('.role-selection-viewport') && !document.querySelector('#btn-retry-profile-load') && !document.body.innerText.includes('Loading Workspace Profile')),
+        isProfileLoadingVisible: () => Boolean(document.querySelector('.role-selection-viewport') && document.body.innerText.includes('Loading Workspace Profile')),
+        isProfileErrorVisible: () => Boolean(document.querySelector('#btn-retry-profile-load')),
+        isSwitchRoleModalVisible: () => Boolean(document.querySelector('.switch-role-modal-container')),
+        openSwitchRoleModal: () => {
+          setSelectedSwitchRole(getRoleDisplayName(userProfile?.role || 'data_analyst'));
+          setIsSwitchRoleModalOpen(true);
+          setSwitchRoleError(null);
+        },
+        closeSwitchRoleModal: () => {
+          setIsSwitchRoleModalOpen(false);
+          setSwitchRoleError(null);
+        },
+        switchWorkspaceRole: (newRole) => handleSwitchWorkspaceRole(newRole),
+        saveRole: () => handleSaveRole(),
+        setSelectedRoleOption: (r) => setSelectedRoleOption(r),
+        getNeedsRoleSelection: () => needsRoleSelection,
+        isProfileLoadingState: () => isProfileLoading,
+        getProfileLoadError: () => profileLoadError,
+        getSaveRoleError: () => saveRoleError,
+        getSwitchRoleError: () => switchRoleError,
+        setIsProfileLoading: (val) => setIsProfileLoading(val),
+        setUserProfile: (p) => setUserProfile(p),
+        setProfileLoadError: (err) => setProfileLoadError(err),
+        setActiveNav: (nav) => setActiveNav(nav),
+        getUserProfile: () => userProfile,
+        isSelfSelectableRole: (r) => isSelfSelectableRole(r),
+        isValidWorkspaceRole: (r) => isValidWorkspaceRole(r),
+        getCanonicalRole: (r) => getCanonicalRole(r),
+        getRoleDisplayName: (r) => getRoleDisplayName(r),
         triggerEmptyDashboard: (role = 'data_analyst') => {
           const norm = normalizeRole(role);
+          const displayRole = getRoleDisplayName(role);
           setSession({ user: { id: '00000000-0000-4000-a000-000000000001', email: 'test@insightiq.ai' } });
-          setUserProfile({ id: '00000000-0000-4000-a000-000000000001', email: 'test@insightiq.ai', full_name: 'Alex Rivera', role: norm });
+          setUserProfile({ id: '00000000-0000-4000-a000-000000000001', email: 'test@insightiq.ai', full_name: 'Alex Rivera', role: displayRole });
           setDevPreviewRole(norm);
           setNeedsRoleSelection(false);
+          setIsProfileLoading(false);
+          setProfileLoadError(null);
           setUserDatasets([]);
           setActiveDatasetId(null);
           setActiveDatasetDetails(null);
@@ -5207,8 +5300,22 @@ window.CANONICAL_PROJECTS = CANONICAL_PROJECTS;
     const [showPassword, setShowPassword] = React.useState(false);
 
     const [isLoading, setIsLoading] = React.useState(false);
+    const isSubmittingRef = React.useRef(false);
     const [oauthLoading, setOauthLoading] = React.useState(null);
     const [feedback, setFeedback] = React.useState(null);
+
+    /* Check Supabase configuration on mount and clear notice once valid config is present */
+    React.useEffect(() => {
+      const client = supabaseClient || (window.getSupabaseClient && window.getSupabaseClient());
+      if (!session && !client) {
+        setFeedback({
+          type: 'error',
+          message: 'Authentication service is not configured. Please ensure VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY are available.'
+        });
+      } else if (!session && client && feedback?.message?.includes('Authentication service is not configured')) {
+        setFeedback(null);
+      }
+    }, [session]);
 
     /* Dashboard Navigation State (URL Synchronized) */
     const getNavFromLocation = () => {
@@ -5896,7 +6003,7 @@ window.CANONICAL_PROJECTS = CANONICAL_PROJECTS;
     const handleUpdateProjectStage = (projectId, stageKey, value = true) => {
       if (!projectId || !stageKey) return;
       setUserProjects(prev => {
-        let list = [...(prev && prev.length > 0 ? prev : CANONICAL_PROJECTS)];
+        let list = [...(prev && prev.length > 0 ? prev : [])];
         const updated = list.map(p => {
           if (p.id === projectId) {
             const nextWs = {
@@ -6943,44 +7050,7 @@ window.CANONICAL_PROJECTS = CANONICAL_PROJECTS;
         if (memRows && memRows.length > 0) {
           rawRows = memRows;
         } else {
-          const isDemo = String(datasetId).startsWith('demo-') || datasetId === 'demo-ds-001' || datasetId === 'demo-ds-002';
-          if (isDemo) {
-            const totalRows = selectedDataset.row_count || 100;
-            if (datasetId === 'demo-ds-001' || datasetId.includes('telemetry')) {
-              for (let i = 0; i < totalRows; i++) {
-                let spend = 150 + Math.random() * 200;
-                let freq = 10 + Math.random() * 15;
-                let risk = 0.05 + Math.random() * 0.4;
-                if (i === 141) { spend = 890.00; freq = 55; risk = 0.98; }
-                else if (i === 587) { spend = 12.00; freq = 1; risk = 0.88; }
-                else if (i === 720) { spend = 750.00; freq = 4; risk = 0.15; }
-                else if (i === 912) { spend = 320.00; freq = 62; risk = 0.95; }
-                rawRows.push({
-                  customer_id: `CUST-${1000 + i}`,
-                  monthly_spend: spend,
-                  session_frequency: freq,
-                  subscription_tier: i % 3 === 0 ? 'Enterprise' : i % 3 === 1 ? 'Pro' : 'Basic',
-                  churn_risk_score: risk
-                });
-              }
-            } else {
-              const baseDate = new Date('2026-01-01');
-              for (let i = 0; i < totalRows; i++) {
-                let rev = 1200000 + Math.random() * 400000;
-                let exp = 600000 + Math.random() * 150000;
-                let margin = 20 + Math.random() * 15;
-                if (i === 99) { rev = 2150000.00; exp = 980000.00; margin = 38.9; }
-                else if (i === 349) { rev = 950000.00; exp = 480000.00; margin = 14.2; }
-                const currentDate = new Date(baseDate.getTime() + i * 24 * 60 * 60 * 1000);
-                rawRows.push({
-                  record_date: currentDate.toISOString().split('T')[0],
-                  quarterly_revenue: rev,
-                  operating_expense: exp,
-                  net_margin_pct: margin
-                });
-              }
-            }
-          } else if (supabaseClient && selectedDataset.storage_path) {
+          if (supabaseClient && selectedDataset.storage_path) {
             const storagePath = selectedDataset.storage_path;
             const { data: fileBlob, error: downloadErr } = await supabaseClient.storage
               .from('datasets')
@@ -7429,44 +7499,7 @@ window.CANONICAL_PROJECTS = CANONICAL_PROJECTS;
         if (memRows && memRows.length > 0) {
           rawRows = memRows;
         } else {
-          const isDemo = String(datasetId).startsWith('demo-') || datasetId === 'demo-ds-001' || datasetId === 'demo-ds-002';
-          if (isDemo) {
-            const totalRows = selectedDataset.row_count || 100;
-            if (datasetId === 'demo-ds-001' || datasetId.includes('telemetry')) {
-              for (let i = 0; i < totalRows; i++) {
-                let spend = 150 + Math.random() * 200;
-                let freq = 10 + Math.random() * 15;
-                let risk = 0.05 + Math.random() * 0.4;
-                if (i === 141) { spend = 890.00; freq = 55; risk = 0.98; }
-                else if (i === 587) { spend = 12.00; freq = 1; risk = 0.88; }
-                else if (i === 720) { spend = 750.00; freq = 4; risk = 0.15; }
-                else if (i === 912) { spend = 320.00; freq = 62; risk = 0.95; }
-                rawRows.push({
-                  customer_id: `CUST-${1000 + i}`,
-                  monthly_spend: spend,
-                  session_frequency: freq,
-                  subscription_tier: i % 3 === 0 ? 'Enterprise' : i % 3 === 1 ? 'Pro' : 'Basic',
-                  churn_risk_score: risk
-                });
-              }
-            } else {
-              const baseDate = new Date('2026-01-01');
-              for (let i = 0; i < totalRows; i++) {
-                let rev = 1200000 + Math.random() * 400000;
-                let exp = 600000 + Math.random() * 150000;
-                let margin = 20 + Math.random() * 15;
-                if (i === 99) { rev = 2150000.00; exp = 980000.00; margin = 38.9; }
-                else if (i === 349) { rev = 950000.00; exp = 480000.00; margin = 14.2; }
-                const currentDate = new Date(baseDate.getTime() + i * 24 * 60 * 60 * 1000);
-                rawRows.push({
-                  record_date: currentDate.toISOString().split('T')[0],
-                  quarterly_revenue: rev,
-                  operating_expense: exp,
-                  net_margin_pct: margin
-                });
-              }
-            }
-          } else if (supabaseClient && selectedDataset.storage_path) {
+          if (supabaseClient && selectedDataset.storage_path) {
             const storagePath = selectedDataset.storage_path;
             const { data: fileBlob, error: downloadErr } = await supabaseClient.storage
               .from('datasets')
@@ -8180,37 +8213,12 @@ window.CANONICAL_PROJECTS = CANONICAL_PROJECTS;
         const saved = localStorage.getItem('insightiq_reports_store');
         if (saved) {
           const parsed = JSON.parse(saved);
-          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+          if (Array.isArray(parsed)) {
+            return parsed.filter(r => !String(r.id).startsWith('rpt-demo'));
+          }
         }
       } catch (e) {}
-      return [
-        {
-          id: 'rpt-demo-001',
-          name: 'Executive_Analytics_Report_2026.pdf',
-          title: 'Executive Analytics Summary Report',
-          datasetId: 'demo-ds-001',
-          datasetName: 'sample_customer_telemetry.csv',
-          reportType: 'Executive Summary',
-          format: 'PDF',
-          created_at: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-          size: 1450000,
-          selectedSections: ['Executive Summary', 'Dataset Schema', 'Descriptive Statistics', 'Anomaly Telemetry'],
-          status: 'Ready'
-        },
-        {
-          id: 'rpt-demo-002',
-          name: 'Financial_Forecasting_Report.pdf',
-          title: 'Financial Forecasting & Scenario Outlook',
-          datasetId: 'demo-ds-002',
-          datasetName: 'sample_financial_forecast.csv',
-          reportType: 'Forecast Report',
-          format: 'PDF',
-          created_at: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
-          size: 2100000,
-          selectedSections: ['Executive Summary', 'Predictive Forecasts', 'Scenario Comparison'],
-          status: 'Ready'
-        }
-      ];
+      return [];
     });
 
     React.useEffect(() => {
@@ -9771,7 +9779,10 @@ window.CANONICAL_PROJECTS = CANONICAL_PROJECTS;
         const targetId = formToUse.dataset_id || activeDatasetId || (userDatasets.length > 0 ? userDatasets[0].id : null);
         let targetDs = userDatasets.find(d => d.id === targetId) || activeDatasetDetails?.dataset || (userDatasets.length > 0 ? userDatasets[0] : null);
         if (!targetDs) {
-          targetDs = { id: 'demo-ds-001', name: 'sample_customer_telemetry.csv', original_filename: 'sample_customer_telemetry.csv', row_count: 100 };
+          setReportError('Please select or upload a dataset before generating a report.');
+          setIsReportGenerating(false);
+          setReportProgress(0);
+          return;
         }
 
         const currentDetails = (activeDatasetDetails && activeDatasetDetails.dataset?.id === targetId)
@@ -9898,7 +9909,10 @@ window.CANONICAL_PROJECTS = CANONICAL_PROJECTS;
         const targetId = formToUse.dataset_id || activeDatasetId || (userDatasets.length > 0 ? userDatasets[0].id : null);
         let targetDs = userDatasets.find(d => d.id === targetId) || activeDatasetDetails?.dataset || (userDatasets.length > 0 ? userDatasets[0] : null);
         if (!targetDs) {
-          targetDs = { id: 'demo-ds-001', name: 'sample_customer_telemetry.csv', original_filename: 'sample_customer_telemetry.csv', row_count: 100 };
+          setReportError('Please select or upload a dataset before generating a report.');
+          setIsReportGenerating(false);
+          setReportProgress(0);
+          return;
         }
 
         const currentDetails = (activeDatasetDetails && activeDatasetDetails.dataset?.id === targetId)
@@ -11051,124 +11065,435 @@ window.CANONICAL_PROJECTS = CANONICAL_PROJECTS;
         const savedSession = localStorage.getItem('insightiq_user_session');
         const savedProfile = localStorage.getItem('insightiq_user_profile');
         if (savedSession) {
-          setSession(JSON.parse(savedSession));
-          if (savedProfile) setUserProfile(JSON.parse(savedProfile));
+          const parsedSession = JSON.parse(savedSession);
+          setSession(parsedSession);
+          if (savedProfile) {
+            const parsedProfile = JSON.parse(savedProfile);
+            setUserProfile(parsedProfile);
+            if (parsedProfile.role && isValidWorkspaceRole(parsedProfile.role)) {
+              setNeedsRoleSelection(false);
+            } else {
+              setNeedsRoleSelection(true);
+            }
+          } else {
+            setNeedsRoleSelection(true);
+          }
           setShowSplash(false);
-          setNeedsRoleSelection(false);
         }
       } catch (e) {}
     }, []);
 
-    /* Load Profile from PostgreSQL */
+    /* In-flight Profile Loader Concurrency Lock */
+    const loadingProfileUserRef = React.useRef(null);
+
     /* Load & Provision Profile in PostgreSQL */
-    const loadUserProfile = async (authUser) => {
-      if (!authUser || !authUser.id || !supabaseClient) return;
+    const loadUserProfile = async (authUser, isRetry = false) => {
+      if (!authUser || !authUser.id) return;
+      const client = supabaseClient || (window.getSupabaseClient && window.getSupabaseClient());
+      if (loadingProfileUserRef.current === authUser.id && !isRetry) return;
+      loadingProfileUserRef.current = authUser.id;
+      setIsProfileLoading(true);
+      setProfileLoadError(null);
+
       try {
-        const validRoles = ['Data Scientist', 'Data Analyst', 'Project Manager', 'Administrator'];
-        let userRole = null;
         let existingProfile = null;
+        let dbQueryFailed = false;
+        let dbErrorMessage = null;
 
-        const { data: dbProfile } = await supabaseClient
-          .from('profiles')
-          .select('*')
-          .eq('id', authUser.id)
-          .maybeSingle();
+        if (client) {
+          try {
+            const { data: dbProfile, error: dbError } = await client
+              .from('profiles')
+              .select('*')
+              .eq('id', authUser.id)
+              .maybeSingle();
 
-        if (dbProfile) {
-          existingProfile = dbProfile;
-          if (dbProfile.role && validRoles.includes(dbProfile.role)) {
-            userRole = dbProfile.role;
+            if (dbError) {
+              dbQueryFailed = true;
+              dbErrorMessage = dbError.message || 'Database error reading profile';
+              console.warn('[Post-Login Warning] Database profiles query error:', dbError);
+            } else if (dbProfile) {
+              existingProfile = dbProfile;
+            }
+          } catch (dbEx) {
+            dbQueryFailed = true;
+            dbErrorMessage = dbEx?.message || 'Database connection failure';
+            console.warn('[Post-Login Notice] Database profiles read failed (network/timeout):', dbEx);
           }
         }
 
-        if (!userRole && authUser.user_metadata?.role && validRoles.includes(authUser.user_metadata.role)) {
-          userRole = authUser.user_metadata.role;
+        // Determine resolved role:
+        // Priority 1: Valid role saved in authoritative database profile
+        // Priority 2: Valid role in auth user metadata
+        // Priority 3: Existing valid cached role in localStorage or React state
+        let resolvedRole = null;
+
+        if (existingProfile?.role && isValidWorkspaceRole(existingProfile.role)) {
+          resolvedRole = getRoleDisplayName(existingProfile.role);
+        } else if (authUser.user_metadata?.role && isValidWorkspaceRole(authUser.user_metadata.role)) {
+          resolvedRole = getRoleDisplayName(authUser.user_metadata.role);
+        } else if (userProfile?.role && isValidWorkspaceRole(userProfile.role)) {
+          resolvedRole = getRoleDisplayName(userProfile.role);
+        } else {
+          try {
+            const cachedStr = localStorage.getItem('insightiq_user_profile');
+            if (cachedStr) {
+              const parsed = JSON.parse(cachedStr);
+              if (parsed?.role && isValidWorkspaceRole(parsed.role)) {
+                resolvedRole = getRoleDisplayName(parsed.role);
+              }
+            }
+          } catch (e) {}
         }
 
-        if (userRole) {
+        // If database query failed:
+        if (dbQueryFailed) {
+          if (resolvedRole) {
+            // We have a valid cached or metadata role, keep using it without overwriting or showing selector
+            const profilePayload = {
+              id: authUser.id,
+              email: authUser.email || `${authUser.id}@user.supabase.co`,
+              full_name: existingProfile?.full_name || authUser.user_metadata?.full_name || userProfile?.full_name || authUser.email?.split('@')[0] || 'Enterprise User',
+              role: resolvedRole,
+              role_configured: true,
+              provider: authUser.app_metadata?.provider || 'email',
+              updated_at: new Date().toISOString()
+            };
+            setUserProfile(profilePayload);
+            setNeedsRoleSelection(false);
+            setSession({ user: authUser });
+            setIsProfileLoading(false);
+            return;
+          } else {
+            // Database query failed AND we have no valid cached role:
+            // Display a recoverable error with retry, DO NOT overwrite with role: null and DO NOT flash selector
+            setProfileLoadError(dbErrorMessage || 'Unable to connect to database to load profile.');
+            setIsProfileLoading(false);
+            setNeedsRoleSelection(false);
+            setSession({ user: authUser });
+            return;
+          }
+        }
+
+        // Database query succeeded:
+        if (resolvedRole) {
           const profilePayload = {
             id: authUser.id,
             email: authUser.email || `${authUser.id}@user.supabase.co`,
             full_name: existingProfile?.full_name || authUser.user_metadata?.full_name || authUser.email?.split('@')[0] || 'Enterprise User',
-            role: userRole,
+            role: resolvedRole,
+            role_configured: true,
             provider: authUser.app_metadata?.provider || 'email',
             updated_at: new Date().toISOString()
           };
-          await supabaseClient.from('profiles').upsert(profilePayload, { onConflict: 'id' });
+
+          // If role was derived from metadata but was missing from profiles table, sync to DB
+          if (client && (!existingProfile || !existingProfile.role || !isValidWorkspaceRole(existingProfile.role))) {
+            client.from('profiles').update({ role: resolvedRole, role_configured: true, updated_at: new Date().toISOString() })
+              .eq('id', authUser.id)
+              .catch(e => console.warn('[Post-Login Notice] Profile role sync skipped:', e));
+          }
+
+          try {
+            localStorage.setItem('insightiq_user_session', JSON.stringify({ user: authUser }));
+            localStorage.setItem('insightiq_user_profile', JSON.stringify(profilePayload));
+          } catch (storageErr) {}
+
           setUserProfile(profilePayload);
           setNeedsRoleSelection(false);
+          setIsProfileLoading(false);
+          setProfileLoadError(null);
         } else {
-          const profilePayload = {
+          // Genuinely fresh user without any saved role in DB or metadata:
+          const unconfiguredProfile = {
             id: authUser.id,
             email: authUser.email || `${authUser.id}@user.supabase.co`,
             full_name: existingProfile?.full_name || authUser.user_metadata?.full_name || authUser.email?.split('@')[0] || 'Enterprise User',
             role: null,
+            role_configured: false,
             provider: authUser.app_metadata?.provider || 'email'
           };
-          setUserProfile(profilePayload);
+          try {
+            localStorage.setItem('insightiq_user_session', JSON.stringify({ user: authUser }));
+            localStorage.setItem('insightiq_user_profile', JSON.stringify(unconfiguredProfile));
+          } catch (storageErr) {}
+
+          setUserProfile(unconfiguredProfile);
           setNeedsRoleSelection(true);
+          setIsProfileLoading(false);
+          setProfileLoadError(null);
         }
+
         setSession({ user: authUser });
       } catch (err) {
-        console.error('[loadUserProfile Error]', err);
-        setUserProfile({
-          id: authUser.id,
-          email: authUser.email || `${authUser.id}@user.supabase.co`,
-          full_name: authUser.email?.split('@')[0] || 'Enterprise User',
-          role: null,
-          provider: authUser.app_metadata?.provider || 'email'
-        });
-        setNeedsRoleSelection(true);
+        console.warn('[Post-Login Warning] Isolated profile load error:', err);
+        if (userProfile?.role && isValidWorkspaceRole(userProfile.role)) {
+          setNeedsRoleSelection(false);
+        } else {
+          setProfileLoadError(err.message || 'Profile loading encountered an unexpected error.');
+          setNeedsRoleSelection(false);
+        }
+        setIsProfileLoading(false);
         setSession({ user: authUser });
+      } finally {
+        loadingProfileUserRef.current = null;
       }
     };
 
     const handleSaveRole = async () => {
-      if (!session?.user?.id) return;
+      if (!session?.user?.id || isSavingRole) return;
       setIsSavingRole(true);
+      setSaveRoleError(null);
+
       try {
-        const payload = {
+        const canonicalDisplayRole = getRoleDisplayName(selectedRoleOption);
+
+        // Security check: non-admins cannot self-select Administrator
+        if (canonicalDisplayRole === 'Administrator') {
+          const isCurrentlyAdmin = userProfile?.role === 'Administrator' || userProfile?.role === 'admin';
+          if (!isCurrentlyAdmin) {
+            setIsSavingRole(false);
+            setSaveRoleError('The Administrator role grants privileged system access and cannot be self-assigned. Please select Data Analyst, Data Scientist, or Project Manager.');
+            return;
+          }
+        }
+
+        const client = supabaseClient || (window.getSupabaseClient && window.getSupabaseClient());
+        let dbSaveSuccess = false;
+        let lastErrorMsg = null;
+
+        if (client) {
+          try {
+            const { data: rpcData, error: rpcErr } = await client.rpc('update_user_workspace_role', { new_role: canonicalDisplayRole });
+            if (!rpcErr && rpcData?.success) {
+              dbSaveSuccess = true;
+            }
+          } catch (e) {}
+
+          if (!dbSaveSuccess) {
+            const { error: updateErr } = await client
+              .from('profiles')
+              .update({
+                role: canonicalDisplayRole,
+                role_configured: true,
+                updated_at: new Date().toISOString()
+              })
+              .eq('id', session.user.id);
+
+            if (!updateErr) {
+              dbSaveSuccess = true;
+            } else {
+              lastErrorMsg = updateErr.message;
+              const payload = {
+                id: session.user.id,
+                email: session.user.email,
+                full_name: userProfile?.full_name || session.user.user_metadata?.full_name || session.user.email?.split('@')[0] || 'Enterprise User',
+                role: canonicalDisplayRole,
+                role_configured: true,
+                updated_at: new Date().toISOString()
+              };
+              const { error: upsertErr } = await client.from('profiles').upsert(payload, { onConflict: 'id' });
+              if (!upsertErr) {
+                dbSaveSuccess = true;
+              } else {
+                lastErrorMsg = upsertErr.message;
+              }
+            }
+          }
+
+          if (dbSaveSuccess) {
+            await client.auth.updateUser({ data: { role: canonicalDisplayRole, role_configured: true } }).catch(() => {});
+          }
+        } else {
+          dbSaveSuccess = true;
+        }
+
+        // Also call backend API endpoint /api/user/role
+        try {
+          const token = localStorage.getItem('insightiq_supabase_auth_token') || '';
+          await fetch('/api/user/role', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+            },
+            body: JSON.stringify({ role: canonicalDisplayRole, userId: session.user.id })
+          });
+        } catch (apiErr) {}
+
+        if (!dbSaveSuccess && client) {
+          const hasActiveAuth = Boolean(localStorage.getItem('insightiq_supabase_auth_token') || client.auth?.currentSession);
+          if (hasActiveAuth && !isDev) {
+            setIsSavingRole(false);
+            setSaveRoleError(lastErrorMsg || 'Unable to persist role to the database. Please check your network and try again.');
+            return;
+          }
+        }
+
+        const updatedProfile = {
+          ...(userProfile || {}),
           id: session.user.id,
           email: session.user.email,
           full_name: userProfile?.full_name || session.user.user_metadata?.full_name || session.user.email?.split('@')[0] || 'Enterprise User',
-          role: selectedRoleOption,
-          updated_at: new Date().toISOString()
+          role: canonicalDisplayRole,
+          role_configured: true
         };
 
-        if (supabaseClient) {
-          await supabaseClient.from('profiles').upsert(payload, { onConflict: 'id' });
-          await supabaseClient.auth.updateUser({ data: { role: selectedRoleOption, role_configured: true } });
-        }
+        try {
+          localStorage.setItem('insightiq_user_profile', JSON.stringify(updatedProfile));
+          if (isDev) {
+            localStorage.setItem('insightiq_dev_preview_role', getCanonicalRole(canonicalDisplayRole));
+            setDevPreviewRole(getCanonicalRole(canonicalDisplayRole));
+          }
+        } catch (e) {}
 
-        setUserProfile(prev => ({ ...prev, role: selectedRoleOption }));
+        setUserProfile(updatedProfile);
         setNeedsRoleSelection(false);
+        setIsSavingRole(false);
+        setRoleToastMessage(`Workspace initialized as ${canonicalDisplayRole}.`);
       } catch (err) {
         console.error('[handleSaveRole Error]', err);
-        setUserProfile(prev => ({ ...prev, role: selectedRoleOption }));
-        setNeedsRoleSelection(false);
-      } finally {
         setIsSavingRole(false);
+        setSaveRoleError(err.message || 'An unexpected error occurred while saving your role. Please try again.');
+      }
+    };
+
+    /* User-Controlled Workspace Role Switching Action */
+    const handleSwitchWorkspaceRole = async (newRole) => {
+      if (!session?.user?.id || isSwitchingRole) return;
+      setIsSwitchingRole(true);
+      setSwitchRoleError(null);
+
+      try {
+        const canonicalDisplayRole = getRoleDisplayName(newRole);
+
+        // Security check: non-admins cannot switch to Administrator
+        if (canonicalDisplayRole === 'Administrator') {
+          const isCurrentlyAdmin = userProfile?.role === 'Administrator' || userProfile?.role === 'admin';
+          if (!isCurrentlyAdmin) {
+            setIsSwitchingRole(false);
+            setSwitchRoleError('The Administrator role grants privileged system access and cannot be self-assigned. Contact an administrator.');
+            return;
+          }
+        }
+
+        const client = supabaseClient || (window.getSupabaseClient && window.getSupabaseClient());
+        let dbSaveSuccess = false;
+        let lastErrorMsg = null;
+
+        if (client) {
+          try {
+            const { data: rpcData, error: rpcErr } = await client.rpc('update_user_workspace_role', { new_role: canonicalDisplayRole });
+            if (!rpcErr && rpcData?.success) {
+              dbSaveSuccess = true;
+            }
+          } catch (e) {}
+
+          if (!dbSaveSuccess) {
+            const { error: updateErr } = await client
+              .from('profiles')
+              .update({
+                role: canonicalDisplayRole,
+                role_configured: true,
+                updated_at: new Date().toISOString()
+              })
+              .eq('id', session.user.id);
+
+            if (!updateErr) {
+              dbSaveSuccess = true;
+            } else {
+              lastErrorMsg = updateErr.message;
+            }
+          }
+
+          if (dbSaveSuccess) {
+            await client.auth.updateUser({ data: { role: canonicalDisplayRole, role_configured: true } }).catch(() => {});
+          }
+        } else {
+          dbSaveSuccess = true;
+        }
+
+        // Also call backend API endpoint /api/user/role
+        try {
+          const token = localStorage.getItem('insightiq_supabase_auth_token') || '';
+          await fetch('/api/user/role', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+            },
+            body: JSON.stringify({ role: canonicalDisplayRole, userId: session.user.id })
+          });
+        } catch (apiErr) {}
+
+        if (!dbSaveSuccess && client) {
+          const hasActiveAuth = Boolean(localStorage.getItem('insightiq_supabase_auth_token') || client.auth?.currentSession);
+          if (hasActiveAuth && !isDev) {
+            setIsSwitchingRole(false);
+            setSwitchRoleError(lastErrorMsg || 'Failed to update workspace role in database. Please try again.');
+            return;
+          }
+        }
+
+        const updatedProfile = {
+          ...userProfile,
+          role: canonicalDisplayRole,
+          role_configured: true
+        };
+
+        try {
+          localStorage.setItem('insightiq_user_profile', JSON.stringify(updatedProfile));
+          if (isDev) {
+            localStorage.setItem('insightiq_dev_preview_role', getCanonicalRole(canonicalDisplayRole));
+            setDevPreviewRole(getCanonicalRole(canonicalDisplayRole));
+          }
+        } catch (e) {}
+
+        setUserProfile(updatedProfile);
+        setIsSwitchingRole(false);
+        setIsSwitchRoleModalOpen(false);
+        setRoleToastMessage(`Workspace role switched to ${canonicalDisplayRole}.`);
+
+        // If active navigation is not allowed in new role, redirect to overview
+        const canonicalNewRoleId = getCanonicalRole(canonicalDisplayRole);
+        const requiredPerm = ROUTE_PERMISSIONS[activeNav];
+        if (requiredPerm && !can(canonicalNewRoleId, requiredPerm)) {
+          handleNavigate('overview');
+        }
+      } catch (err) {
+        setIsSwitchingRole(false);
+        setSwitchRoleError(err.message || 'An error occurred while switching roles.');
       }
     };
 
     /* Supabase Session Listener */
     React.useEffect(() => {
-      if (!supabaseClient) return;
+      const client = supabaseClient || (window.getSupabaseClient && window.getSupabaseClient());
+      if (!client) return;
 
-      supabaseClient.auth.getSession().then(({ data: { session: activeSession } }) => {
+      client.auth.getSession().then(({ data: { session: activeSession } }) => {
         if (activeSession?.user) {
           loadUserProfile(activeSession.user);
         }
+      }).catch(err => {
+        console.warn('[Supabase getSession Notice]', err);
       });
 
-      const { data: { subscription } } = supabaseClient.auth.onAuthStateChange(async (event, activeSession) => {
+      const { data: { subscription } } = client.auth.onAuthStateChange(async (event, activeSession) => {
         if (activeSession?.user) {
           await loadUserProfile(activeSession.user);
         } else if (event === 'SIGNED_OUT') {
-          localStorage.removeItem('insightiq_user_session');
-          localStorage.removeItem('insightiq_user_profile');
+          try {
+            localStorage.removeItem('insightiq_user_session');
+            localStorage.removeItem('insightiq_user_profile');
+            localStorage.removeItem('insightiq_dev_preview_role');
+            localStorage.removeItem('insightiq_supabase_auth_token');
+          } catch (e) {}
           setSession(null);
           setUserProfile(null);
+          setNeedsRoleSelection(false);
+          setIsProfileLoading(false);
+          setProfileLoadError(null);
         }
       });
 
@@ -11687,12 +12012,16 @@ window.CANONICAL_PROJECTS = CANONICAL_PROJECTS;
 
     /* OAuth Event Handlers */
     const handleGoogleAuth = async () => {
-      if (!supabaseClient) return;
+      const client = supabaseClient || (window.getSupabaseClient && window.getSupabaseClient());
+      if (!client) {
+        setFeedback({ type: 'error', message: 'Authentication service is not configured. Please ensure VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY are available.' });
+        return;
+      }
       setOauthLoading('google');
       setFeedback(null);
       try {
         const redirectUrl = `${window.location.origin}${window.location.pathname}`;
-        const { error } = await supabaseClient.auth.signInWithOAuth({
+        const { error } = await client.auth.signInWithOAuth({
           provider: 'google',
           options: { redirectTo: redirectUrl }
         });
@@ -11707,12 +12036,16 @@ window.CANONICAL_PROJECTS = CANONICAL_PROJECTS;
     };
 
     const handleMicrosoftAuth = async () => {
-      if (!supabaseClient) return;
+      const client = supabaseClient || (window.getSupabaseClient && window.getSupabaseClient());
+      if (!client) {
+        setFeedback({ type: 'error', message: 'Authentication service is not configured. Please ensure VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY are available.' });
+        return;
+      }
       setOauthLoading('microsoft');
       setFeedback(null);
       try {
         const redirectUrl = `${window.location.origin}${window.location.pathname}`;
-        const { error } = await supabaseClient.auth.signInWithOAuth({
+        const { error } = await client.auth.signInWithOAuth({
           provider: 'azure',
           options: { redirectTo: redirectUrl }
         });
@@ -11729,10 +12062,29 @@ window.CANONICAL_PROJECTS = CANONICAL_PROJECTS;
     /* Form Submit Handler */
     const handleSubmit = async (e) => {
       e.preventDefault();
+      if (isSubmittingRef.current || isLoading) return; // Prevent duplicate invocation on rapid clicks
+      isSubmittingRef.current = true;
       setFeedback(null);
 
+      const client = supabaseClient || (window.getSupabaseClient && window.getSupabaseClient());
+      if (!client) {
+        isSubmittingRef.current = false;
+        setFeedback({
+          type: 'error',
+          message: 'Authentication service is not configured. Please ensure VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY are available.'
+        });
+        return;
+      }
+
       if (viewMode === 'signup' && password !== confirmPassword) {
+        isSubmittingRef.current = false;
         setFeedback({ type: 'error', message: 'Passwords do not match.' });
+        return;
+      }
+
+      if (viewMode === 'signup' && password.length < 6) {
+        isSubmittingRef.current = false;
+        setFeedback({ type: 'error', message: 'Password must be at least 6 characters long.' });
         return;
       }
 
@@ -11740,74 +12092,146 @@ window.CANONICAL_PROJECTS = CANONICAL_PROJECTS;
 
       try {
         if (viewMode === 'signin') {
-          let data = null;
-          let error = null;
-          if (supabaseClient) {
-            try {
-              const authPromise = supabaseClient.auth.signInWithPassword({ email, password });
-              const timeoutPromise = new Promise(resolve => setTimeout(() => resolve({ error: { message: 'fetch failed', status: 0 } }), 1800));
-              const res = await Promise.race([authPromise, timeoutPromise]);
-              data = res.data;
-              error = res.error;
-            } catch (authEx) {
-              error = authEx;
-            }
-          }
+          const cleanEmail = (email || '').trim();
+          const { data, error } = await client.auth.signInWithPassword({
+            email: cleanEmail,
+            password
+          });
+
           setIsLoading(false);
+
           if (error) {
-            if (error.message.includes('Email not confirmed') || error.status === 400 || error.message.includes('Invalid login') || error.message.includes('fetch failed') || error.status === 0 || !navigator.onLine) {
-              const testUser = {
-                id: '33a65f2b-2701-44d6-9f5a-b6938f2fe219',
-                email: email || 'user@insightiq.ai',
-                app_metadata: { provider: 'email' },
-                user_metadata: { full_name: 'Enterprise User', role: 'Data Scientist' }
-              };
-              await loadUserProfile(testUser);
+            const errMsg = error.message || '';
+            if (errMsg.includes('Invalid login credentials') || (error.status === 400 && !errMsg.includes('Email not confirmed'))) {
+              setFeedback({
+                type: 'error',
+                message: 'Invalid email or password. Please verify your credentials and try again.'
+              });
+            } else if (errMsg.includes('Email not confirmed')) {
+              setFeedback({
+                type: 'error',
+                message: 'Your email address has not been confirmed yet. Please check your inbox for the verification link, or confirm your user in the Supabase Dashboard.'
+              });
+            } else if (errMsg.includes('fetch failed') || error.status === 0 || !navigator.onLine) {
+              setFeedback({
+                type: 'error',
+                message: 'Network connection failed. Unable to reach Supabase authentication server. Please check your internet connection and retry.'
+              });
+            } else if (error.status === 429) {
+              setFeedback({
+                type: 'error',
+                message: 'Too many authentication attempts. Please wait a moment before trying again.'
+              });
             } else {
-              setFeedback({ type: 'error', message: error.message });
+              setFeedback({
+                type: 'error',
+                message: errMsg || 'Authentication failed. Please verify your credentials and try again.'
+              });
             }
-          } else if (data?.user) {
-            await loadUserProfile(data.user);
+            return;
+          }
+
+          if (data?.user) {
+            try {
+              await loadUserProfile(data.user);
+            } catch (profileErr) {
+              console.warn('[Post-Login Notice] Profile sync failed, continuing session:', profileErr);
+              setSession({ user: data.user });
+            }
           }
         } else if (viewMode === 'signup') {
-          const { data, error } = await supabaseClient.auth.signUp({
-            email,
+          const cleanEmail = (email || '').trim();
+          const { data, error } = await client.auth.signUp({
+            email: cleanEmail,
             password,
             options: {
               data: {
-                full_name: fullName,
+                full_name: (fullName || '').trim(),
                 role: role
               }
             }
           });
+
           setIsLoading(false);
+
           if (error) {
-            setFeedback({ type: 'error', message: error.message });
-          } else if (data?.user) {
-            setFeedback({ type: 'success', message: 'Account registered! Please check your email or sign in.' });
-            setViewMode('signin');
+            const errMsg = error.message || '';
+            if (errMsg.includes('Database error saving new user') || error.status === 500) {
+              setFeedback({
+                type: 'error',
+                message: 'Registration trigger error: The database signup hook failed. Please apply the migration in "supabase/consolidated_repair_and_remaining_migrations.sql" in your Supabase SQL Editor.'
+              });
+            } else if (errMsg.includes('User already registered')) {
+              setFeedback({
+                type: 'error',
+                message: 'An account with this email address already exists. Please sign in or reset your password.'
+              });
+            } else if (errMsg.includes('Password should be at least')) {
+              setFeedback({
+                type: 'error',
+                message: 'Password is too short. Please choose a password with at least 6 characters.'
+              });
+            } else {
+              setFeedback({
+                type: 'error',
+                message: errMsg || 'Registration failed. Please try again.'
+              });
+            }
+            return;
+          }
+
+          if (data?.user) {
+            if (data.session) {
+              try {
+                await loadUserProfile(data.user);
+              } catch (profileErr) {
+                setSession({ user: data.user });
+              }
+            } else {
+              setFeedback({
+                type: 'success',
+                message: `Account registered successfully! A confirmation link was sent to ${cleanEmail}. Please verify your email before signing in.`
+              });
+              setViewMode('signin');
+            }
           }
         } else if (viewMode === 'forgot') {
-          const { error } = await supabaseClient.auth.resetPasswordForEmail(email, {
-            redirectTo: window.location.href
+          const cleanEmail = (email || '').trim();
+          const redirectOrigin = (typeof window !== 'undefined' && window.location.origin) ? window.location.origin : 'http://localhost:8085';
+          const { error } = await client.auth.resetPasswordForEmail(cleanEmail, {
+            redirectTo: redirectOrigin
           });
+
           setIsLoading(false);
+
           if (error) {
-            setFeedback({ type: 'error', message: error.message });
+            setFeedback({ type: 'error', message: error.message || 'Failed to send password recovery link.' });
           } else {
-            setFeedback({ type: 'info', message: `Password reset link sent to ${email}` });
+            setFeedback({ type: 'info', message: `Password reset instructions sent to ${cleanEmail}. Please check your inbox.` });
           }
         }
       } catch (err) {
         setIsLoading(false);
         setFeedback({ type: 'error', message: err.message || 'An unexpected authentication error occurred.' });
+      } finally {
+        isSubmittingRef.current = false;
       }
     };
 
     const handleSignOut = async () => {
-      if (supabaseClient) {
-        await supabaseClient.auth.signOut();
+      const client = supabaseClient || (window.getSupabaseClient && window.getSupabaseClient());
+      if (client) {
+        try {
+          await client.auth.signOut();
+        } catch (e) {
+          console.warn('[SignOut Notice]', e);
+        }
       }
+      try {
+        localStorage.removeItem('insightiq_user_session');
+        localStorage.removeItem('insightiq_user_profile');
+        localStorage.removeItem('insightiq_supabase_auth_token');
+      } catch (e) {}
       setSession(null);
       setUserProfile(null);
       setFeedback(null);
@@ -12943,7 +13367,82 @@ window.CANONICAL_PROJECTS = CANONICAL_PROJECTS;
       window.addEventListener('keydown', handleKeyDown);
       return () => window.removeEventListener('keydown', handleKeyDown);
     }, []);
-if (session && userProfile && needsRoleSelection) {
+    /* PROFILE REHYDRATION & LOADING GUARD (Prevents chooser flash during async initialization) */
+    if (session && (!userProfile || !userProfile.role) && isProfileLoading) {
+      return React.createElement('div', {
+        className: 'role-selection-viewport animate-fade-in',
+        style: { display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', backgroundColor: '#090D16' }
+      },
+        React.createElement('div', {
+          style: {
+            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16,
+            background: 'rgba(15, 23, 42, 0.85)', backdropFilter: 'blur(12px)',
+            border: '1px solid rgba(255, 255, 255, 0.1)', borderRadius: '16px',
+            padding: '40px 32px', maxWidth: '420px', width: '100%', textAlign: 'center'
+          }
+        },
+          React.createElement('div', {
+            style: {
+              width: 44, height: 44, borderRadius: '50%',
+              border: '3px solid #8B5CF6', borderTopColor: 'transparent',
+              animation: 'spin 1s linear infinite'
+            }
+          }),
+          React.createElement('h3', { style: { color: '#FFFFFF', fontSize: '1.125rem', fontWeight: 600, margin: 0 } }, 'Restoring Workspace Session'),
+          React.createElement('p', { style: { color: 'var(--text-secondary)', fontSize: '0.875rem', margin: 0 } }, 'Verifying saved profile and workspace role permissions...')
+        )
+      );
+    }
+
+    /* PROFILE RECOVERABLE ERROR GUARD (Network/DB error with explicit retry action, never wipes role) */
+    if (session && (!userProfile || !userProfile.role) && profileLoadError) {
+      return React.createElement('div', {
+        className: 'role-selection-viewport animate-fade-in',
+        style: { display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', padding: 20, backgroundColor: '#090D16' }
+      },
+        React.createElement('div', {
+          style: {
+            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16,
+            background: 'rgba(15, 23, 42, 0.95)', backdropFilter: 'blur(16px)',
+            border: '1px solid rgba(239, 68, 68, 0.4)', borderRadius: '16px',
+            padding: '36px 28px', maxWidth: '460px', width: '100%', textAlign: 'center',
+            boxShadow: '0 20px 40px rgba(0, 0, 0, 0.6)'
+          }
+        },
+          React.createElement('div', {
+            style: {
+              width: 52, height: 52, borderRadius: '50%',
+              backgroundColor: 'rgba(239, 68, 68, 0.15)', border: '1px solid rgba(239, 68, 68, 0.3)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#EF4444', fontSize: '1.5rem', fontWeight: 700
+            }
+          }, '!'),
+          React.createElement('h2', { style: { color: '#FFFFFF', fontSize: '1.25rem', fontWeight: 700, margin: 0 } }, 'Profile Synchronization Failed'),
+          React.createElement('p', { style: { color: '#CBD5E1', fontSize: '0.875rem', lineHeight: 1.6, margin: 0 } }, profileLoadError),
+          React.createElement('div', { style: { display: 'flex', gap: 12, marginTop: 8, width: '100%' } },
+            React.createElement('button', {
+              type: 'button',
+              className: 'btn btn-primary',
+              id: 'btn-retry-profile-load',
+              style: { flex: 1, padding: '10px 16px', backgroundColor: '#38BDF8', border: 'none', color: '#0F172A', fontWeight: 600, borderRadius: '8px', cursor: 'pointer' },
+              onClick: () => {
+                if (session && session.user) {
+                  loadUserProfile(session.user, true);
+                }
+              }
+            }, 'Retry Connection'),
+            React.createElement('button', {
+              type: 'button',
+              className: 'btn btn-secondary',
+              style: { padding: '10px 16px', backgroundColor: 'transparent', border: '1px solid rgba(255, 255, 255, 0.2)', color: '#CBD5E1', borderRadius: '8px', cursor: 'pointer' },
+              onClick: handleSignOut
+            }, 'Sign Out')
+          )
+        )
+      );
+    }
+
+    /* ONBOARDING ROLE CHOOSER (Displayed only when user genuinely lacks a saved role) */
+    if (session && (!userProfile?.role || needsRoleSelection) && !isProfileLoading && !profileLoadError) {
       return React.createElement('div', { className: 'role-selection-viewport animate-fade-in' },
         React.createElement('div', { className: 'role-selection-container' },
           React.createElement('div', { className: 'role-header-block' },
@@ -12951,7 +13450,7 @@ if (session && userProfile && needsRoleSelection) {
               React.createElement(SparklesIcon, { size: 28 })
             ),
             React.createElement('h1', { className: 'role-title' }, 'How will you use InsightIQ AI?'),
-            React.createElement('p', { className: 'role-subtitle' }, 'Choose the workspace that best matches your role.')
+            React.createElement('p', { className: 'role-subtitle' }, 'Choose the workspace persona that best matches your workflow. You can switch your workspace role at any time.')
           ),
           React.createElement('div', { className: 'role-cards-grid' },
             [
@@ -12972,17 +13471,15 @@ if (session && userProfile && needsRoleSelection) {
                 title: 'PROJECT MANAGER',
                 icon: '👔',
                 desc: 'Executive intelligence, business health, risks, forecasts and decision support.'
-              },
-              {
-                id: 'Administrator',
-                title: 'ADMINISTRATOR',
-                icon: '🛡️',
-                desc: 'Platform management, users, permissions, security and system administration.'
               }
             ].map(r => React.createElement('div', {
               key: r.id,
+              id: `role-card-${r.id.toLowerCase().replace(/ /g, '-')}`,
               className: `role-card ${selectedRoleOption === r.id ? 'selected' : ''}`,
-              onClick: () => setSelectedRoleOption(r.id)
+              onClick: () => {
+                setSelectedRoleOption(r.id);
+                setSaveRoleError(null);
+              }
             },
               React.createElement('div', { className: 'role-card-top' },
                 React.createElement('div', { className: 'role-card-icon-badge' }, r.icon),
@@ -12994,12 +13491,21 @@ if (session && userProfile && needsRoleSelection) {
               React.createElement('p', { className: 'role-card-description' }, r.desc)
             ))
           ),
+          saveRoleError && React.createElement('div', {
+            id: 'save-role-error-banner',
+            style: {
+              padding: '12px 16px', borderRadius: '10px',
+              backgroundColor: 'rgba(239, 68, 68, 0.15)', border: '1px solid #EF4444',
+              color: '#FCA5A5', fontSize: '0.84375rem', marginTop: 16, textAlign: 'center', lineHeight: 1.5
+            }
+          }, `⚠️ ${saveRoleError}`),
           React.createElement('button', {
             type: 'button',
+            id: 'btn-role-continue',
             className: 'btn-role-continue',
             onClick: handleSaveRole,
             disabled: isSavingRole
-          }, isSavingRole ? 'Saving Role...' : 'Continue to InsightIQ AI →')
+          }, isSavingRole ? 'Saving Role to Database...' : 'Continue to InsightIQ AI →')
         )
       );
     }
@@ -13260,8 +13766,26 @@ if (session && userProfile && needsRoleSelection) {
 
               /* Right Header Controls: AI Status, Notifications, Theme, Profile */
               React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 14 } },
-                /* Role Indicator & Developer Portal Switcher */
-                isDev ? React.createElement('div', { className: 'dev-mode-container' },
+                /* Workspace Role Indicator & Switcher Badge */
+                React.createElement('div', {
+                  className: 'portal-header-role-badge',
+                  id: 'header-role-badge',
+                  style: { cursor: 'pointer', userSelect: 'none' },
+                  title: 'Click to switch workspace role',
+                  onClick: () => {
+                    setSelectedSwitchRole(getCanonicalRole(userProfile?.role) || 'data_analyst');
+                    setSwitchRoleError(null);
+                    setIsSwitchRoleModalOpen(true);
+                  }
+                },
+                  React.createElement('span', { className: 'portal-header-role-dot', style: { backgroundColor: ROLE_CONFIG[effectiveRole]?.badgeColor || '#38BDF8' } }),
+                  React.createElement('span', null, ROLE_CONFIG[effectiveRole]?.workspaceTitle || 'DATA ANALYST WORKSPACE'),
+                  React.createElement('span', {
+                    style: { marginLeft: 6, fontSize: '0.6875rem', color: '#94A3B8', padding: '1px 5px', borderRadius: '4px', background: 'rgba(255,255,255,0.08)' }
+                  }, 'Switch ▾')
+                ),
+                /* Developer Portal Switcher (Local preview feature) */
+                isDev && React.createElement('div', { className: 'dev-mode-container' },
                   React.createElement('div', {
                     className: 'dev-mode-pill',
                     onClick: () => setIsDevMenuOpen(!isDevMenuOpen),
@@ -13300,9 +13824,6 @@ if (session && userProfile && needsRoleSelection) {
                       effectiveRole === opt.role && React.createElement('span', { style: { color: '#38BDF8', fontWeight: 700 } }, '✓')
                     ))
                   )
-                ) : React.createElement('div', { className: 'portal-header-role-badge' },
-                  React.createElement('span', { className: 'portal-header-role-dot', style: { backgroundColor: ROLE_CONFIG[effectiveRole]?.badgeColor || '#38BDF8' } }),
-                  React.createElement('span', null, ROLE_CONFIG[effectiveRole]?.workspaceTitle || 'DATA ANALYST WORKSPACE')
                 ),
                 /* AI Status Pill */
                 React.createElement('div', { className: 'ai-badge pulse-glow-indicator', style: { cursor: 'pointer' }, onClick: () => handleNavigate('copilot') },
@@ -13333,16 +13854,12 @@ if (session && userProfile && needsRoleSelection) {
                   },
                     React.createElement('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, paddingBottom: 8, borderBottom: '1px solid var(--border-subtle)' } },
                       React.createElement('span', { style: { fontWeight: 600, fontSize: '0.875rem' } }, 'Notifications'),
-                      React.createElement('span', { className: 'kpi-delta-pill kpi-delta-positive', style: { fontSize: '0.6875rem' } }, `${userNotifications.length || 3} New`)
+                      React.createElement('span', { className: 'kpi-delta-pill kpi-delta-positive', style: { fontSize: '0.6875rem' } }, `${userNotifications.length} New`)
                     ),
-                    [
-                      { title: 'Dataset Telemetry Analyzed', time: '10 mins ago', desc: 'Dataset health score updated to 96%.' },
-                      { title: '90-Day Forecast Ready', time: '1 hour ago', desc: 'Time series predictive model accuracy score 94.2%.' },
-                      { title: 'System Security Check', time: '2 hours ago', desc: 'Session authenticated cleanly via Supabase.' }
-                    ].map((n, idx) => React.createElement('div', { key: idx, style: { marginBottom: 10, paddingBottom: 8, borderBottom: idx < 2 ? '1px solid var(--border-subtle)' : 'none' } },
+                    userNotifications.length === 0 ? React.createElement('div', { style: { padding: '24px 0', textAlign: 'center', color: 'var(--text-tertiary)', fontSize: '0.8125rem' } }, 'No new notifications.') : userNotifications.map((n, idx) => React.createElement('div', { key: idx, style: { marginBottom: 10, paddingBottom: 8, borderBottom: idx < userNotifications.length - 1 ? '1px solid var(--border-subtle)' : 'none' } },
                       React.createElement('div', { style: { fontSize: '0.8125rem', fontWeight: 600 } }, n.title),
-                      React.createElement('div', { style: { fontSize: '0.75rem', color: 'var(--text-tertiary)', marginTop: 2 } }, n.desc),
-                      React.createElement('div', { style: { fontSize: '0.6875rem', color: '#8B5CF6', marginTop: 4 } }, n.time)
+                      React.createElement('div', { style: { fontSize: '0.75rem', color: 'var(--text-tertiary)', marginTop: 2 } }, n.desc || n.message),
+                      React.createElement('div', { style: { fontSize: '0.6875rem', color: '#8B5CF6', marginTop: 4 } }, n.time || 'Just now')
                     ))
                   )
                 ),
@@ -13350,6 +13867,7 @@ if (session && userProfile && needsRoleSelection) {
                 /* User Profile Dropdown Trigger */
                 React.createElement('div', { style: { position: 'relative' } },
                   React.createElement('button', {
+                    id: 'header-user-menu-btn',
                     onClick: () => setIsUserMenuOpen(!isUserMenuOpen),
                     style: { display: 'flex', alignItems: 'center', gap: 10, background: 'none', border: 'none', cursor: 'pointer' }
                   },
@@ -13357,23 +13875,38 @@ if (session && userProfile && needsRoleSelection) {
                       style: { width: 34, height: 34, borderRadius: '50%', background: 'linear-gradient(135deg, #8B5CF6, #3B82F6)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: '0.8125rem', boxShadow: '0 2px 10px rgba(139, 92, 246, 0.3)' }
                     }, initials),
                     React.createElement('div', { style: { textAlign: 'left' } },
-                      React.createElement('div', { className: 'font-button', style: { fontSize: '0.8125rem' } }, userProfile.full_name),
-                      React.createElement('div', { className: 'font-caption', style: { color: 'var(--text-tertiary)' } }, userProfile.role)
+                      React.createElement('div', { className: 'font-button', style: { fontSize: '0.8125rem' } }, userProfile?.full_name || currentProfile.full_name),
+                      React.createElement('div', { className: 'font-caption', style: { color: 'var(--text-tertiary)' } }, getRoleDisplayName(userProfile?.role || currentProfile.role))
                     )
                   ),
 
                   isUserMenuOpen && React.createElement('div', {
+                    id: 'header-user-menu-popover',
                     className: 'animate-fade-in',
                     style: {
                       position: 'absolute', top: '100%', right: 0, marginTop: 8, zIndex: 60,
                       backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border-subtle)',
-                      borderRadius: 'var(--radius-lg)', boxShadow: 'var(--shadow-xl)', padding: 16, width: 230
+                      borderRadius: 'var(--radius-lg)', boxShadow: 'var(--shadow-xl)', padding: 16, width: 240
                     }
                   },
                     React.createElement('div', { style: { paddingBottom: 10, marginBottom: 10, borderBottom: '1px solid var(--border-subtle)' } },
                       React.createElement('div', { className: 'font-button', style: { fontWeight: 600 } }, currentProfile.full_name),
-                      React.createElement('div', { className: 'font-caption', style: { color: 'var(--text-tertiary)' } }, currentProfile.email)
+                      React.createElement('div', { className: 'font-caption', style: { color: 'var(--text-tertiary)' } }, currentProfile.email),
+                      React.createElement('div', { style: { marginTop: 4, display: 'inline-flex', alignItems: 'center', gap: 6, padding: '2px 8px', borderRadius: '4px', backgroundColor: 'rgba(139, 92, 246, 0.15)', color: '#A78BFA', fontSize: '0.6875rem', fontWeight: 600 } },
+                        getRoleDisplayName(userProfile?.role || currentProfile.role)
+                      )
                     ),
+                    React.createElement('button', {
+                      className: 'btn btn-ghost btn-sm',
+                      id: 'menu-btn-switch-role',
+                      style: { width: '100%', justifyContent: 'flex-start', marginBottom: 4, color: '#A78BFA', fontWeight: 600 },
+                      onClick: () => {
+                        setSelectedSwitchRole(getCanonicalRole(userProfile?.role) || 'data_analyst');
+                        setSwitchRoleError(null);
+                        setIsSwitchRoleModalOpen(true);
+                        setIsUserMenuOpen(false);
+                      }
+                    }, React.createElement(SparklesIcon, { size: 16 }), ' Switch Workspace Role'),
                     React.createElement('button', {
                       className: 'btn btn-ghost btn-sm',
                       style: { width: '100%', justifyContent: 'flex-start', marginBottom: 4 },
@@ -13386,6 +13919,7 @@ if (session && userProfile && needsRoleSelection) {
                     }, React.createElement(CpuIcon, { size: 16 }), ' Settings'),
                     React.createElement('button', {
                       className: 'btn btn-ghost btn-sm',
+                      id: 'menu-btn-signout',
                       style: { width: '100%', justifyContent: 'flex-start', color: 'var(--color-error-500)' },
                       onClick: handleSignOut
                     }, React.createElement(LockIcon, { size: 16 }), ' Sign Out')
@@ -13597,6 +14131,178 @@ if (session && userProfile && needsRoleSelection) {
                 }
               }
             }),
+
+            /* SWITCH WORKSPACE ROLE MODAL */
+            isSwitchRoleModalOpen && React.createElement('div', {
+              id: 'switch-workspace-role-modal',
+              style: {
+                position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+                backgroundColor: 'rgba(0, 0, 0, 0.78)', backdropFilter: 'blur(8px)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                zIndex: 99999, padding: 20
+              }
+            },
+              React.createElement('div', {
+                className: 'animate-scale-up',
+                style: {
+                  width: '100%', maxWidth: 540, backgroundColor: '#0F172A',
+                  border: '1px solid rgba(139, 92, 246, 0.35)', borderRadius: '16px',
+                  padding: 24, boxShadow: '0 24px 48px rgba(0, 0, 0, 0.7)',
+                  display: 'flex', flexDirection: 'column', gap: 16
+                }
+              },
+                /* Modal Header */
+                React.createElement('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between' } },
+                  React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 10 } },
+                    React.createElement('div', {
+                      style: {
+                        width: 38, height: 38, borderRadius: '10px',
+                        backgroundColor: 'rgba(139, 92, 246, 0.15)', border: '1px solid rgba(139, 92, 246, 0.3)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#A78BFA'
+                      }
+                    }, React.createElement(SparklesIcon, { size: 20 })),
+                    React.createElement('div', null,
+                      React.createElement('h3', { style: { fontSize: '1.125rem', fontWeight: 700, color: '#FFF', margin: 0 } }, 'Switch Workspace Role'),
+                      React.createElement('p', { style: { fontSize: '0.75rem', color: '#94A3B8', margin: 0 } }, 'Change your active workspace persona without admin intervention.')
+                    )
+                  ),
+                  !isSwitchingRole && React.createElement('button', {
+                    id: 'btn-close-switch-role-modal',
+                    onClick: () => { setIsSwitchRoleModalOpen(false); setSwitchRoleError(null); },
+                    style: { background: 'none', border: 'none', color: '#94A3B8', fontSize: '1.25rem', cursor: 'pointer', padding: 4 }
+                  }, '✕')
+                ),
+
+                /* Role selection options */
+                React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: 10 } },
+                  [
+                    {
+                      id: 'data_analyst',
+                      name: 'Data Analyst',
+                      icon: '📊',
+                      desc: 'KPI dashboards, dataset exploration, SQL analytics, and business reporting.'
+                    },
+                    {
+                      id: 'data_scientist',
+                      name: 'Data Scientist',
+                      icon: '🔬',
+                      desc: 'Machine learning, statistical analysis, predictive models, and experiment tracking.'
+                    },
+                    {
+                      id: 'project_manager',
+                      name: 'Project Manager',
+                      icon: '👔',
+                      desc: 'Project milestones, delivery health, resource utilization, and executive summaries.'
+                    }
+                  ].map(r => {
+                    const isSelected = selectedSwitchRole === r.id;
+                    const isCurrent = getCanonicalRole(userProfile?.role) === r.id;
+                    return React.createElement('div', {
+                      key: r.id,
+                      id: `switch-role-option-${r.id}`,
+                      onClick: () => {
+                        if (!isSwitchingRole) {
+                          setSelectedSwitchRole(r.id);
+                          setSwitchRoleError(null);
+                        }
+                      },
+                      style: {
+                        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                        padding: '12px 16px', borderRadius: '12px',
+                        backgroundColor: isSelected ? 'rgba(139, 92, 246, 0.12)' : 'rgba(255, 255, 255, 0.03)',
+                        border: isSelected ? '1px solid #8B5CF6' : '1px solid rgba(255, 255, 255, 0.08)',
+                        cursor: isSwitchingRole ? 'not-allowed' : 'pointer',
+                        transition: 'all 0.15s ease'
+                      }
+                    },
+                      React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 12 } },
+                        React.createElement('div', { style: { fontSize: '1.5rem' } }, r.icon),
+                        React.createElement('div', null,
+                          React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 8 } },
+                            React.createElement('span', { style: { color: '#FFF', fontWeight: 600, fontSize: '0.875rem' } }, r.name),
+                            isCurrent && React.createElement('span', {
+                              style: { fontSize: '0.6875rem', padding: '2px 6px', borderRadius: '4px', backgroundColor: 'rgba(56, 189, 248, 0.2)', color: '#38BDF8', fontWeight: 600 }
+                            }, 'Current Active')
+                          ),
+                          React.createElement('div', { style: { fontSize: '0.75rem', color: '#94A3B8', marginTop: 2 } }, r.desc)
+                        )
+                      ),
+                      React.createElement('div', {
+                        style: {
+                          width: 18, height: 18, borderRadius: '50%',
+                          border: isSelected ? '2px solid #8B5CF6' : '2px solid rgba(255, 255, 255, 0.3)',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center'
+                        }
+                      }, isSelected && React.createElement('div', { style: { width: 8, height: 8, borderRadius: '50%', backgroundColor: '#8B5CF6' } }))
+                    );
+                  })
+                ),
+
+                /* Security boundary note */
+                React.createElement('div', {
+                  style: {
+                    padding: '10px 12px', borderRadius: '8px',
+                    backgroundColor: 'rgba(56, 189, 248, 0.08)', border: '1px solid rgba(56, 189, 248, 0.2)',
+                    color: '#93C5FD', fontSize: '0.75rem', lineHeight: 1.5
+                  }
+                }, 'ℹ️ Workspace personas switch analytical tools immediately and persist to your profile in Supabase. Privileged administrative roles require administrator assignment.'),
+
+                /* Error banner */
+                switchRoleError && React.createElement('div', {
+                  id: 'switch-role-error-banner',
+                  style: {
+                    padding: '10px 12px', borderRadius: '8px',
+                    backgroundColor: 'rgba(239, 68, 68, 0.15)', border: '1px solid #EF4444',
+                    color: '#FCA5A5', fontSize: '0.8125rem', lineHeight: 1.4
+                  }
+                }, `⚠️ ${switchRoleError}`),
+
+                /* Action Footer */
+                React.createElement('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 12, marginTop: 4 } },
+                  React.createElement('button', {
+                    type: 'button',
+                    disabled: isSwitchingRole,
+                    onClick: () => { setIsSwitchRoleModalOpen(false); setSwitchRoleError(null); },
+                    style: {
+                      height: 38, padding: '0 16px', borderRadius: '10px',
+                      backgroundColor: 'transparent', border: '1px solid rgba(255, 255, 255, 0.2)',
+                      color: '#94A3B8', fontSize: '0.875rem', fontWeight: 600, cursor: 'pointer'
+                    }
+                  }, 'Cancel'),
+                  React.createElement('button', {
+                    type: 'button',
+                    id: 'btn-confirm-switch-role',
+                    disabled: isSwitchingRole || !selectedSwitchRole || selectedSwitchRole === getCanonicalRole(userProfile?.role),
+                    onClick: () => handleSwitchWorkspaceRole(selectedSwitchRole),
+                    style: {
+                      height: 38, padding: '0 18px', borderRadius: '10px',
+                      background: (isSwitchingRole || !selectedSwitchRole || selectedSwitchRole === getCanonicalRole(userProfile?.role))
+                        ? '#334155' : 'linear-gradient(135deg, #8B5CF6, #3B82F6)',
+                      border: 'none', color: '#FFF', fontSize: '0.875rem', fontWeight: 600,
+                      cursor: (isSwitchingRole || !selectedSwitchRole || selectedSwitchRole === getCanonicalRole(userProfile?.role))
+                        ? 'not-allowed' : 'pointer',
+                      display: 'inline-flex', alignItems: 'center', gap: 8
+                    }
+                  }, isSwitchingRole ? 'Saving Role...' : 'Confirm Role Switch →')
+                )
+              )
+            ),
+
+            /* FLOATING SUCCESS TOAST */
+            roleToastMessage && React.createElement('div', {
+              id: 'role-success-toast',
+              className: 'animate-fade-in',
+              style: {
+                position: 'fixed', bottom: 24, right: 24, zIndex: 100000,
+                backgroundColor: '#0F172A', border: '1px solid #10B981',
+                color: '#34D399', borderRadius: '12px', padding: '12px 18px',
+                boxShadow: '0 10px 25px rgba(0, 0, 0, 0.5)',
+                display: 'flex', alignItems: 'center', gap: 10, fontSize: '0.875rem', fontWeight: 600
+              }
+            },
+              React.createElement(CheckCircleIcon, { size: 18 }),
+              React.createElement('span', null, roleToastMessage)
+            ),
 
             /* MAIN CONTENT ROUTE SWITCHER */
             React.createElement('main', { className: 'app-content' },
@@ -22191,16 +22897,11 @@ if (session && userProfile && needsRoleSelection) {
                     React.createElement('h1', { style: { fontSize: '1.5rem', fontWeight: 700, color: '#fff', margin: 0 } }, 'Activity Timeline'),
                     React.createElement('p', { style: { fontSize: '0.84375rem', color: 'var(--text-secondary)', margin: '4px 0 0 0' } }, 'Complete audit trail of system events and dataset pipelines.')
                   ),
-                  React.createElement('div', { className: 'card-v2' },
-                    [
-                      { title: 'Dataset Processing Complete', user: currentProfile?.full_name || 'System User', time: '12 mins ago', status: 'success' },
-                      { title: 'AI Model Inference Ran', user: 'System Bot', time: '1 hour ago', status: 'info' },
-                      { title: 'Executive Brief PDF Generated', user: currentProfile?.full_name || 'System User', time: '2 hours ago', status: 'success' }
-                    ].map((act, i) => React.createElement('div', { key: i, style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 0', borderBottom: '1px solid var(--border-subtle)' } },
-                      React.createElement('div', null, React.createElement('div', { style: { fontWeight: 600, color: '#fff', fontSize: '0.875rem' } }, act.title), React.createElement('div', { style: { fontSize: '0.75rem', color: 'var(--text-tertiary)' } }, `By ${act.user} • ${act.time}`)),
-                      React.createElement('span', { className: 'kpi-delta-pill kpi-delta-positive' }, 'Completed')
-                    ))
-                  )
+                  React.createElement('div', { className: 'card-v2', style: { padding: '48px 24px', textAlign: 'center' } },
+                    React.createElement(ActivityIcon, { size: 40, style: { color: 'var(--text-tertiary)', margin: '0 auto 12px', display: 'block' } }),
+                    React.createElement('div', { style: { fontWeight: 600, color: '#fff', fontSize: '1rem', marginBottom: 6 } }, 'No Activity Recorded Yet'),
+                    React.createElement('div', { style: { fontSize: '0.8125rem', color: 'var(--text-tertiary)', maxWidth: 380, margin: '0 auto' } }, 'Audit trail of system events, dataset ingestion, and model training executions will appear here.')
+                  ),
                 ),
 
                 /* ------------------------------------------------------------
@@ -22211,11 +22912,10 @@ if (session && userProfile && needsRoleSelection) {
                     React.createElement('h1', { style: { fontSize: '1.5rem', fontWeight: 700, color: '#fff', margin: 0 } }, 'Notification Workspace'),
                     React.createElement('p', { style: { fontSize: '0.84375rem', color: 'var(--text-secondary)', margin: '4px 0 0 0' } }, 'System updates and analytical alert history.')
                   ),
-                  React.createElement('div', { className: 'card-v2' },
-                    [
-                      { title: 'Dataset Telemetry Uploaded', time: '10 mins ago' },
-                      { title: '90-Day Forecast Model Complete', time: '1 hour ago' }
-                    ].map((n, i) => React.createElement('div', { key: i, style: { padding: '12px 0', borderBottom: '1px solid var(--border-subtle)' } }, React.createElement('div', { style: { fontWeight: 600, color: '#fff' } }, n.title), React.createElement('div', { style: { fontSize: '0.75rem', color: 'var(--text-tertiary)' } }, n.time)))
+                  React.createElement('div', { className: 'card-v2', style: { padding: '48px 24px', textAlign: 'center' } },
+                    React.createElement(CheckCircleIcon, { size: 40, style: { color: 'var(--text-tertiary)', margin: '0 auto 12px', display: 'block' } }),
+                    React.createElement('div', { style: { fontWeight: 600, color: '#fff', fontSize: '1rem', marginBottom: 6 } }, 'No Notifications'),
+                    React.createElement('div', { style: { fontSize: '0.8125rem', color: 'var(--text-tertiary)', maxWidth: 380, margin: '0 auto' } }, 'You have caught up with all analytical alerts, dataset status updates, and model lifecycle events.')
                   )
                 ),
 
@@ -22225,7 +22925,7 @@ if (session && userProfile && needsRoleSelection) {
                 can(effectiveRole, 'settings.manage') && activeNav === 'settings' && React.createElement('div', null,
                   React.createElement('div', { style: { marginBottom: 24 } },
                     React.createElement('h1', { style: { fontSize: '1.5rem', fontWeight: 700, color: '#fff', margin: 0 } }, 'System Settings'),
-                    React.createElement('p', { style: { fontSize: '0.84375rem', color: 'var(--text-secondary)', margin: '4px 0 0 0' } }, 'Manage platform preferences and security defaults.')
+                    React.createElement('p', { style: { fontSize: '0.84375rem', color: 'var(--text-secondary)', margin: '4px 0 0 0' } }, 'Manage platform preferences, active workspace persona, and security defaults.')
                   ),
                   React.createElement('div', { className: 'card-v2' },
                     React.createElement('h3', { style: { fontSize: '1rem', fontWeight: 600, color: '#fff', marginBottom: 16 } }, 'Appearance & Theme'),
@@ -22233,6 +22933,29 @@ if (session && userProfile && needsRoleSelection) {
                       ['Dark Enterprise', 'Light Mode', 'System Default'].map((th, i) => React.createElement('button', {
                         key: i, className: `btn ${i === 0 ? 'btn-primary' : 'btn-secondary'}`
                       }, th))
+                    )
+                  ),
+                  React.createElement('div', { className: 'card-v2', style: { marginTop: 16 } },
+                    React.createElement('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16 } },
+                      React.createElement('div', null,
+                        React.createElement('h3', { style: { fontSize: '1rem', fontWeight: 600, color: '#fff', margin: '0 0 4px 0' } }, 'Active Workspace Persona'),
+                        React.createElement('p', { style: { fontSize: '0.8125rem', color: 'var(--text-secondary)', margin: 0 } },
+                          'Your active workspace persona is currently set to ',
+                          React.createElement('strong', { style: { color: '#A78BFA' } }, getRoleDisplayName(userProfile?.role || currentProfile.role)),
+                          '. You can switch between Analyst, Data Scientist, and Project Manager views anytime.'
+                        )
+                      ),
+                      React.createElement('button', {
+                        type: 'button',
+                        className: 'btn btn-primary',
+                        id: 'settings-btn-switch-role',
+                        style: { background: 'linear-gradient(135deg, #8B5CF6, #3B82F6)', border: 'none', color: '#fff', fontWeight: 600 },
+                        onClick: () => {
+                          setSelectedSwitchRole(getCanonicalRole(userProfile?.role) || 'data_analyst');
+                          setSwitchRoleError(null);
+                          setIsSwitchRoleModalOpen(true);
+                        }
+                      }, 'Switch Workspace Role')
                     )
                   )
                 ),
@@ -22243,7 +22966,7 @@ if (session && userProfile && needsRoleSelection) {
                 can(effectiveRole, 'profile.view') && activeNav === 'profile' && React.createElement('div', null,
                   React.createElement('div', { style: { marginBottom: 24 } },
                     React.createElement('h1', { style: { fontSize: '1.5rem', fontWeight: 700, color: '#fff', margin: 0 } }, 'User Profile'),
-                    React.createElement('p', { style: { fontSize: '0.84375rem', color: 'var(--text-secondary)', margin: '4px 0 0 0' } }, 'Account credentials and session credentials.')
+                    React.createElement('p', { style: { fontSize: '0.84375rem', color: 'var(--text-secondary)', margin: '4px 0 0 0' } }, 'Account credentials, active workspace role, and security authorization.')
                   ),
                   React.createElement('div', { className: 'card-v2' },
                     React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 16, marginBottom: 20 } },
@@ -22252,6 +22975,40 @@ if (session && userProfile && needsRoleSelection) {
                         React.createElement('h3', { style: { fontSize: '1.125rem', fontWeight: 600, color: '#fff', margin: 0 } }, currentProfile.full_name),
                         React.createElement('p', { style: { fontSize: '0.84375rem', color: 'var(--text-secondary)', margin: '2px 0 0 0' } }, currentProfile.email)
                       )
+                    )
+                  ),
+                  React.createElement('div', { className: 'card-v2', style: { marginTop: 16 } },
+                    React.createElement('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16 } },
+                      React.createElement('div', null,
+                        React.createElement('div', { style: { fontSize: '0.75rem', fontWeight: 700, color: '#94A3B8', letterSpacing: '0.05em', textTransform: 'uppercase' } }, 'Workspace Role & Permissions'),
+                        React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 10, marginTop: 6 } },
+                          React.createElement('span', {
+                            id: 'profile-role-display-badge',
+                            style: {
+                              fontSize: '1rem', fontWeight: 700, color: '#FFFFFF',
+                              padding: '4px 12px', borderRadius: '8px',
+                              backgroundColor: 'rgba(139, 92, 246, 0.2)', border: '1px solid rgba(139, 92, 246, 0.4)'
+                            }
+                          }, getRoleDisplayName(userProfile?.role || currentProfile.role)),
+                          React.createElement('span', { style: { fontSize: '0.8125rem', color: 'var(--text-secondary)' } },
+                            isSelfSelectableRole(userProfile?.role || currentProfile.role) ? '(Self-Selectable Workspace Persona)' : '(Administrative Privilege Role)'
+                          )
+                        ),
+                        React.createElement('p', { style: { fontSize: '0.8125rem', color: 'var(--text-tertiary)', marginTop: 8, marginBottom: 0, maxWidth: 520 } },
+                          'Switching your workspace persona updates your active dashboard tooling, KPI modules, and navigation menus immediately, and persists to your database profile.'
+                        )
+                      ),
+                      React.createElement('button', {
+                        type: 'button',
+                        className: 'btn btn-primary',
+                        id: 'profile-btn-switch-role',
+                        style: { background: 'linear-gradient(135deg, #8B5CF6, #3B82F6)', border: 'none', color: '#fff', fontWeight: 600 },
+                        onClick: () => {
+                          setSelectedSwitchRole(getCanonicalRole(userProfile?.role) || 'data_analyst');
+                          setSwitchRoleError(null);
+                          setIsSwitchRoleModalOpen(true);
+                        }
+                      }, 'Switch Workspace Role')
                     )
                   )
                 ),
@@ -22284,11 +23041,7 @@ if (session && userProfile && needsRoleSelection) {
                           React.createElement('p', { style: { fontSize: '0.875rem', color: '#9CA3AF', marginTop: 4 } }, 'Enterprise datasets, automated schema inference, data health indices, and attribute statistics.')
                         ),
                         React.createElement('div', { style: { display: 'flex', gap: 10 } },
-                          React.createElement('button', {
-                            type: 'button',
-                            className: 'btn-secondary-action',
-                            onClick: handleSeedDemoData
-                          }, '🧪 Load Demo Dataset'),
+                          
                           React.createElement('button', {
                             type: 'button',
                             className: 'btn-primary-action',
@@ -22310,11 +23063,7 @@ if (session && userProfile && needsRoleSelection) {
                             className: 'btn-primary-action',
                             onClick: () => setIsUploadModalOpen(true)
                           }, '+ Upload First Dataset'),
-                          React.createElement('button', {
-                            type: 'button',
-                            className: 'btn-secondary-action',
-                            onClick: handleSeedDemoData
-                          }, '🧪 Load Demo Dataset')
+                          
                         )
                       )
                     );
@@ -23968,11 +24717,7 @@ if (session && userProfile && needsRoleSelection) {
                           className: 'btn-primary-action',
                           onClick: () => setIsCreateModelModalOpen(true)
                         }, '+ Create First Model'),
-                        React.createElement('button', {
-                          type: 'button',
-                          className: 'btn-secondary-action',
-                          onClick: handleSeedDemoData
-                        }, '🧪 Load Demo Models')
+                        
                       )
                     ) : filteredModels.length === 0 ? React.createElement('div', { className: 'empty-state-card' },
                       React.createElement('div', { className: 'empty-state-icon' }, React.createElement(SparklesIcon, { size: 24 })),

@@ -3,12 +3,47 @@ const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
 
-// Load environment variables from .env.local first, then .env
+// Load environment variables from .env.local first, then .env (checking both current directory and parent workspace root)
 dotenv.config({ path: path.join(__dirname, '.env.local') });
 dotenv.config({ path: path.join(__dirname, '.env') });
+dotenv.config({ path: path.join(__dirname, '..', '.env.local') });
+dotenv.config({ path: path.join(__dirname, '..', '.env') });
+
+// Canonical Supabase Environment Resolvers (Supports VITE_, NEXT_PUBLIC_, and standard SUPABASE_ prefixes)
+const resolveSupabaseUrl = () => {
+  return (
+    process.env.VITE_SUPABASE_URL ||
+    process.env.NEXT_PUBLIC_SUPABASE_URL ||
+    process.env.SUPABASE_URL ||
+    process.env.REACT_APP_SUPABASE_URL ||
+    ''
+  ).trim();
+};
+
+const resolveSupabaseKey = () => {
+  const key = (
+    process.env.VITE_SUPABASE_PUBLISHABLE_KEY ||
+    process.env.VITE_SUPABASE_ANON_KEY ||
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+    process.env.SUPABASE_PUBLISHABLE_KEY ||
+    process.env.SUPABASE_ANON_KEY ||
+    process.env.REACT_APP_SUPABASE_ANON_KEY ||
+    ''
+  ).trim();
+
+  // Guard against exposing service_role or backend secrets to browser
+  if (key && (key.startsWith('sb_secret_') || key.includes('service_role'))) {
+    console.error('[Security Violation] Service role or secret key detected in publishable key variable. Refusing to expose to frontend.');
+    return '';
+  }
+
+  return key;
+};
 
 const crypto = require('crypto');
 const { GoogleGenAI } = require('@google/genai');
+const { createClient } = require('@supabase/supabase-js');
 const multer = require('multer');
 
 const MAX_UPLOAD_SIZE_BYTES = 50 * 1024 * 1024; // 50MB safe memory threshold
@@ -39,7 +74,29 @@ const handleUpload = (req, res, next) => {
 const engine = require('./engine');
 
 const app = express();
-const DEFAULT_PORT = process.env.PORT || 8085;
+
+const FALLBACK_DEFAULT_PORT = 8085;
+const MAX_FALLBACK_PORT_ATTEMPTS = 10;
+const MIN_PORT = 1;
+const MAX_PORT = 65535;
+
+/**
+ * Validates and parses a port value to a valid TCP port number (1-65535).
+ * Falls back to default port if invalid.
+ */
+function parsePort(rawPort, fallback = FALLBACK_DEFAULT_PORT) {
+  if (rawPort === undefined || rawPort === null || rawPort === '') {
+    return fallback;
+  }
+  const parsed = parseInt(String(rawPort).trim(), 10);
+  if (Number.isInteger(parsed) && parsed >= MIN_PORT && parsed <= MAX_PORT) {
+    return parsed;
+  }
+  console.warn(`[Port Warning] Invalid port value "${rawPort}". Falling back to default port ${fallback}.`);
+  return fallback;
+}
+
+const DEFAULT_PORT = parsePort(process.env.PORT, FALLBACK_DEFAULT_PORT);
 
 // Secure CORS: restrict to same-origin and localhost dev environments
 const allowedOriginRegex = /^(https?:\/\/(localhost|127\.0\.0\.1)(:[0-9]+)?)$/;
@@ -124,7 +181,7 @@ const apiRateLimitMap = new Map();
 const API_RATE_LIMIT_WINDOW_MS = 60 * 1000;
 const API_RATE_LIMIT_MAX_REQUESTS = 180; // 180 requests/min per IP
 const apiRateLimiter = (req, res, next) => {
-  if (req.path.startsWith('/health') || req.path === '/api/health') {
+  if (req.path.startsWith('/health') || req.path === '/api/health' || req.path.startsWith('/api/config')) {
     return next();
   }
   const clientIp = req.ip || req.connection?.remoteAddress || '127.0.0.1';
@@ -199,8 +256,8 @@ app.get(['/health', '/api/health'], (req, res) => {
     services: {
       application: { status: 'healthy' },
       database: {
-        status: process.env.VITE_SUPABASE_URL ? 'configured' : 'standalone_mode',
-        configured: Boolean(process.env.VITE_SUPABASE_URL)
+        status: resolveSupabaseUrl() ? 'configured' : 'standalone_mode',
+        configured: Boolean(resolveSupabaseUrl())
       },
       geminiAi: {
         status: isConfigured ? 'available' : 'deterministic_fallback_only',
@@ -221,6 +278,228 @@ app.get(['/health/liveness', '/livez'], (req, res) => {
 
 app.get(['/health/readiness', '/readyz'], (req, res) => {
   res.status(200).json({ status: 'ready' });
+});
+
+// Client-Safe Public Configuration Endpoints
+// Exposes ONLY publishable/anon Supabase configuration, NEVER server secrets or Gemini keys
+app.get(['/api/config', '/config'], (req, res) => {
+  const url = resolveSupabaseUrl();
+  const key = resolveSupabaseKey();
+  res.json({
+    success: true,
+    config: {
+      VITE_SUPABASE_URL: url,
+      VITE_SUPABASE_PUBLISHABLE_KEY: key,
+      VITE_SUPABASE_ANON_KEY: key,
+      NEXT_PUBLIC_SUPABASE_URL: url,
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: key,
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: key,
+      SUPABASE_URL: url,
+      SUPABASE_ANON_KEY: key
+    }
+  });
+});
+
+app.get(['/api/config.js', '/config.js'], (req, res) => {
+  const url = resolveSupabaseUrl();
+  const key = resolveSupabaseKey();
+  const publicConfig = {
+    VITE_SUPABASE_URL: url,
+    VITE_SUPABASE_PUBLISHABLE_KEY: key,
+    VITE_SUPABASE_ANON_KEY: key,
+    NEXT_PUBLIC_SUPABASE_URL: url,
+    NEXT_PUBLIC_SUPABASE_ANON_KEY: key,
+    NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: key,
+    SUPABASE_URL: url,
+    SUPABASE_ANON_KEY: key
+  };
+  res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  res.send(`window.__ENV__ = Object.assign(window.__ENV__ || {}, ${JSON.stringify(publicConfig)});`);
+});
+
+// Supported workspace roles & permissions allowlist
+const SUPPORTED_WORKSPACE_ROLES = [
+  {
+    id: 'data_analyst',
+    name: 'Data Analyst',
+    title: 'DATA ANALYST',
+    icon: '📊',
+    description: 'Business intelligence, exploratory data analytics, KPI telemetry, dashboards, and reporting.',
+    selfSelectable: true
+  },
+  {
+    id: 'data_scientist',
+    name: 'Data Scientist',
+    title: 'DATA SCIENTIST',
+    icon: '🔬',
+    description: 'Advanced machine learning, predictive modeling, fine-tuning sandbox, and statistical experiments.',
+    selfSelectable: true
+  },
+  {
+    id: 'project_manager',
+    name: 'Project Manager',
+    title: 'PROJECT MANAGER',
+    icon: '👔',
+    description: 'Portfolio intelligence, milestone tracking, ROI analytics, and cross-team delivery governance.',
+    selfSelectable: true
+  },
+  {
+    id: 'admin',
+    name: 'Administrator',
+    title: 'ADMINISTRATOR',
+    icon: '🛡️',
+    description: 'Enterprise RBAC, user provisioning, audit logging, system telemetry, and platform security.',
+    selfSelectable: false
+  }
+];
+
+const CANONICAL_ROLE_MAP = {
+  data_analyst: 'Data Analyst',
+  analyst: 'Data Analyst',
+  business_analyst: 'Data Analyst',
+  student: 'Data Analyst',
+  researcher: 'Data Analyst',
+  data_scientist: 'Data Scientist',
+  scientist: 'Data Scientist',
+  ml_engineer: 'Data Scientist',
+  ai_engineer: 'Data Scientist',
+  project_manager: 'Project Manager',
+  pm: 'Project Manager',
+  product_manager: 'Project Manager',
+  program_manager: 'Project Manager',
+  admin: 'Administrator',
+  administrator: 'Administrator'
+};
+
+// Public Discovery of Supported Workspace Roles
+app.get('/api/user/roles', (req, res) => {
+  res.json({
+    success: true,
+    roles: SUPPORTED_WORKSPACE_ROLES
+  });
+});
+
+// Secure Workspace Role Switcher Endpoint
+app.post('/api/user/role', async (req, res) => {
+  try {
+    const rawRole = req.body?.role;
+    if (!rawRole) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing role in request payload.'
+      });
+    }
+
+    const normalizedKey = String(rawRole).trim().toLowerCase().replace(/[\s_-]+/g, '_');
+    const targetCanonicalRole = CANONICAL_ROLE_MAP[normalizedKey];
+
+    if (!targetCanonicalRole) {
+      return res.status(400).json({
+        success: false,
+        error: `Invalid role "${rawRole}". Permitted workspace roles are Data Analyst, Data Scientist, and Project Manager.`
+      });
+    }
+
+    const authHeader = req.headers.authorization || '';
+    const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
+
+    const supabaseUrl = resolveSupabaseUrl();
+    const supabaseKey = resolveSupabaseKey();
+
+    let authenticatedUserId = null;
+    let isExistingAdmin = false;
+
+    if (token && supabaseUrl && supabaseKey) {
+      const authClient = createClient(supabaseUrl, supabaseKey, {
+        auth: { persistSession: false, autoRefreshToken: false }
+      });
+      const { data: { user }, error: authErr } = await authClient.auth.getUser(token);
+      if (authErr || !user) {
+        return res.status(401).json({
+          success: false,
+          error: 'Invalid or expired session token.'
+        });
+      }
+      authenticatedUserId = user.id;
+
+      // Check if user already holds administrator privileges in profiles
+      const { data: currentProfile } = await authClient
+        .from('profiles')
+        .select('role')
+        .eq('id', authenticatedUserId)
+        .maybeSingle();
+
+      if (currentProfile && (currentProfile.role === 'Administrator' || currentProfile.role === 'admin')) {
+        isExistingAdmin = true;
+      }
+    } else if (req.body?.userId) {
+      // Development / mock fallback
+      authenticatedUserId = req.body.userId;
+      if (req.body.isCurrentAdmin) isExistingAdmin = true;
+    } else {
+      return res.status(401).json({
+        success: false,
+        error: 'Authentication required to modify workspace role.'
+      });
+    }
+
+    // Security Check: Non-admins cannot self-assign Administrator
+    if (targetCanonicalRole === 'Administrator' && !isExistingAdmin) {
+      return res.status(403).json({
+        success: false,
+        error: 'Access Denied: The Administrator role grants privileged system access and cannot be self-assigned. Contact an administrator.'
+      });
+    }
+
+    // Persist to Supabase if authenticated client is available
+    if (token && supabaseUrl && supabaseKey && authenticatedUserId) {
+      const userScopedClient = createClient(supabaseUrl, supabaseKey, {
+        auth: { persistSession: false },
+        global: { headers: { Authorization: `Bearer ${token}` } }
+      });
+
+      const { data: updatedProfile, error: updateErr } = await userScopedClient
+        .from('profiles')
+        .update({
+          role: targetCanonicalRole,
+          role_configured: true,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', authenticatedUserId)
+        .select()
+        .maybeSingle();
+
+      if (updateErr) {
+        return res.status(500).json({
+          success: false,
+          error: `Failed to update profile record: ${updateErr.message}`
+        });
+      }
+
+      return res.json({
+        success: true,
+        role: targetCanonicalRole,
+        role_configured: true,
+        user_id: authenticatedUserId,
+        profile: updatedProfile,
+        message: `Workspace role successfully updated to ${targetCanonicalRole}.`
+      });
+    }
+
+    return res.json({
+      success: true,
+      role: targetCanonicalRole,
+      role_configured: true,
+      user_id: authenticatedUserId,
+      message: `Workspace role updated to ${targetCanonicalRole}.`
+    });
+  } catch (err) {
+    return res.status(500).json({
+      success: false,
+      error: `Internal role update failure: ${err.message}`
+    });
+  }
 });
 
 // Helper to parse retryDelay in seconds from Google error responses
@@ -1253,20 +1532,110 @@ app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'index.html'));
 });
 
-function startServer(portToTry) {
-  const server = app.listen(portToTry, '0.0.0.0', () => {
-    console.log(`InsightIQ AI Server running at http://localhost:${portToTry}/`);
-  });
+/**
+ * Starts the HTTP server on a specified port with automatic numeric increment
+ * fallback if the port is in use (EADDRINUSE) or permission denied (EACCES).
+ *
+ * @param {number|string} portToTry Initial port to attempt
+ * @param {number} attempt Current retry attempt count (1-based)
+ * @param {number} maxAttempts Maximum number of port increment attempts
+ * @returns {Promise<{server: import('http').Server, port: number}>}
+ */
+function startServer(portToTry = DEFAULT_PORT, attempt = 1, maxAttempts = MAX_FALLBACK_PORT_ATTEMPTS) {
+  const numericPort = parsePort(portToTry, FALLBACK_DEFAULT_PORT);
 
-  server.on('error', (err) => {
-    if (err.code === 'EACCES' || err.code === 'EADDRINUSE') {
-      const nextPort = portToTry + 1;
-      console.warn(`[Port Warning] Port ${portToTry} unavailable (${err.code}). Trying port ${nextPort}...`);
-      startServer(nextPort);
-    } else {
-      console.error('[Server Error]', err);
+  if (attempt > maxAttempts) {
+    const errorMsg = `[Server Fatal Error] Exhausted all ${maxAttempts} port fallback attempts starting from ${portToTry}. Unable to bind server.`;
+    console.error(errorMsg);
+    if (require.main === module) {
+      process.exit(1);
     }
+    return Promise.reject(new Error(errorMsg));
+  }
+
+  return new Promise((resolve, reject) => {
+    let server = null;
+    let isBound = false;
+
+    try {
+      server = app.listen(numericPort, '0.0.0.0', () => {
+        isBound = true;
+        const activeAddress = server.address();
+        const actualPort = typeof activeAddress === 'object' && activeAddress ? activeAddress.port : numericPort;
+        process.env.ACTIVE_PORT = String(actualPort);
+
+        console.log(`InsightIQ AI Server running at http://localhost:${actualPort}/`);
+        const supabaseUrl = resolveSupabaseUrl();
+        const supabaseKey = resolveSupabaseKey();
+        const geminiKey = (process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY || '').trim();
+        console.log('[Safe Startup Configuration Check]');
+        console.log(`  - Frontend Architecture: Express Static + React UMD (No bundler required)`);
+        console.log(`  - Supabase URL: [${supabaseUrl ? 'PRESENT' : 'MISSING'}] (https: ${supabaseUrl.startsWith('https://')})`);
+        console.log(`  - Supabase Key: [${supabaseKey ? 'PRESENT' : 'MISSING'}] (length: ${supabaseKey.length} chars)`);
+        console.log(`  - Gemini AI Key: [${geminiKey ? 'PRESENT' : 'MISSING'}]`);
+        console.log(`  - Active Public Aliases: VITE_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_URL, SUPABASE_URL`);
+        console.log(`  - Active Bound Port: ${actualPort}`);
+
+        resolve({ server, port: actualPort });
+      });
+    } catch (listenErr) {
+      console.error(`[Server Synchronous Error on Port ${numericPort}]`, listenErr);
+      return reject(listenErr);
+    }
+
+    server.on('error', (err) => {
+      if (isBound) {
+        console.error('[Server Runtime Error]', err);
+        return;
+      }
+
+      if (err.code === 'EACCES' || err.code === 'EADDRINUSE') {
+        const nextPort = numericPort + 1;
+        if (nextPort > MAX_PORT) {
+          const rangeErr = `[Port Error] Port ${nextPort} exceeds maximum valid TCP port (${MAX_PORT}).`;
+          console.error(rangeErr);
+          if (require.main === module) {
+            process.exit(1);
+          }
+          return reject(new Error(rangeErr));
+        }
+
+        console.warn(`[Port Warning] Port ${numericPort} unavailable (${err.code}). Attempt ${attempt}/${maxAttempts}. Trying port ${nextPort}...`);
+
+        try {
+          server.close();
+        } catch (_) {}
+
+        startServer(nextPort, attempt + 1, maxAttempts)
+          .then(resolve)
+          .catch(reject);
+      } else {
+        console.error('[Server Startup Error]', err);
+        try {
+          server.close();
+        } catch (_) {}
+        if (require.main === module) {
+          process.exit(1);
+        }
+        reject(err);
+      }
+    });
   });
 }
 
-startServer(DEFAULT_PORT);
+// Automatically start when invoked directly as entry point
+if (require.main === module) {
+  startServer(DEFAULT_PORT).catch((err) => {
+    console.error('[Fatal Process Error on Startup]', err.message);
+  });
+}
+
+module.exports = {
+  app,
+  startServer,
+  parsePort,
+  FALLBACK_DEFAULT_PORT,
+  MAX_FALLBACK_PORT_ATTEMPTS,
+  MIN_PORT,
+  MAX_PORT
+};
