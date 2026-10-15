@@ -1,28 +1,28 @@
 /* ==========================================================================
-   InsightIQ AI - Layout & Grid System (Dark Enterprise BI)
+   InsightIQ AI — Shared Application Shell & Spatial Grid System
+   Theme: "Intelligence, distilled." — Minimal Obsidian & Cyan Architecture
    ========================================================================== */
 
 .app-container {
   display: flex;
   min-height: 100vh;
   background-color: var(--bg-app);
-  background-image: 
-    radial-gradient(ellipse 80% 50% at 20% -10%, rgba(139, 92, 246, 0.07), transparent 70%),
-    radial-gradient(ellipse 60% 40% at 80% 100%, rgba(56, 189, 248, 0.06), transparent 70%),
-    radial-gradient(circle at 50% 30%, rgba(59, 130, 246, 0.04), transparent 60%);
   color: var(--text-primary);
   font-family: var(--font-sans);
+  position: relative;
+  overflow-x: hidden;
 }
 
-/* Sidebar Navigation Rail */
+/* --------------------------------------------------------------------------
+   Compact Collapsible Sidebar Navigation Rail
+   -------------------------------------------------------------------------- */
 .app-sidebar {
   position: sticky;
   top: 0;
   height: 100vh;
-  background: linear-gradient(180deg, #090c14 0%, #06080e 100%);
+  background: var(--bg-sidebar);
   border-right: 1px solid var(--border-subtle);
-  box-shadow: 4px 0 24px rgba(0, 0, 0, 0.4);
-  transition: width var(--transition-spring);
+  transition: width var(--transition-fast);
   z-index: 40;
   display: flex;
   flex-direction: column;
@@ -36,22 +36,32 @@
   width: 4px;
 }
 .app-sidebar::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-full);
 }
 
 .app-sidebar.expanded {
-  width: 240px;
+  width: var(--sidebar-width-expanded);
 }
 
 .app-sidebar.collapsed {
-  width: 64px;
+  width: var(--sidebar-width-collapsed);
+}
+
+.sidebar-brand-header {
+  height: var(--header-height);
+  border-bottom: 1px solid var(--border-subtle);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 14px;
+  flex-shrink: 0;
 }
 
 .sidebar-group-label {
-  padding: 12px 16px 4px 16px;
-  font-size: 0.6875rem;
-  font-weight: 700;
+  padding: 14px 14px 4px 14px;
+  font-size: 0.65625rem;
+  font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--text-tertiary);
@@ -66,34 +76,48 @@
   width: 100%;
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 9px 12px;
+  gap: 10px;
+  padding: 8px 12px;
   margin-bottom: 2px;
   border-radius: var(--radius-md);
   border: 1px solid transparent;
   background: transparent;
   color: var(--text-secondary);
-  font-size: 0.84375rem;
+  font-size: 0.8125rem;
   font-weight: 450;
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition: background var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast);
   text-align: left;
   white-space: nowrap;
+  position: relative;
 }
 
 .nav-item-btn:hover {
   background: var(--bg-surface-hover);
   color: var(--text-primary);
-  border-color: var(--border-subtle);
-  transform: translateX(2px);
+}
+
+.nav-item-btn:focus-visible {
+  outline: 2px solid var(--accent-cyan);
+  outline-offset: -2px;
 }
 
 .nav-item-btn.active {
-  background: linear-gradient(90deg, rgba(139, 92, 246, 0.18) 0%, rgba(56, 189, 248, 0.08) 100%);
-  color: var(--color-purple-400);
-  border-color: rgba(139, 92, 246, 0.35);
-  font-weight: 600;
-  box-shadow: 0 2px 8px rgba(139, 92, 246, 0.15);
+  background: var(--accent-cyan-subtle);
+  color: var(--text-primary);
+  border-color: var(--accent-cyan-border);
+  font-weight: 550;
+}
+
+.nav-item-btn.active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 6px;
+  bottom: 6px;
+  width: 2.5px;
+  border-radius: 2px;
+  background: var(--accent-cyan);
 }
 
 .app-sidebar.collapsed .nav-item-btn {
@@ -101,43 +125,50 @@
   padding: 10px;
 }
 
-/* Main Content Area */
+.app-sidebar.collapsed .nav-item-btn span {
+  display: none;
+}
+
+/* --------------------------------------------------------------------------
+   Main Workspace Layout Area
+   -------------------------------------------------------------------------- */
 .app-main-wrapper {
   flex: 1;
   display: flex;
   flex-direction: column;
   min-width: 0;
   min-height: 100vh;
+  background-color: var(--bg-app);
 }
 
 .app-header {
   position: sticky;
   top: 0;
-  height: 60px;
+  height: var(--header-height);
   background: var(--bg-header);
   border-bottom: 1px solid var(--border-subtle);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
   z-index: 30;
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 0 var(--space-xl);
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
 }
 
 .app-content {
   flex: 1;
-  padding: var(--space-xl) var(--space-xl) var(--space-2xl);
-  max-width: 1680px;
+  padding: var(--space-2xl) var(--space-2xl) var(--space-3xl);
+  max-width: var(--container-max-width);
   width: 100%;
   margin: 0 auto;
+  box-sizing: border-box;
 }
 
 .app-footer {
-  height: 44px;
+  height: var(--footer-height);
   border-top: 1px solid var(--border-subtle);
-  background-color: #06080d;
+  background-color: var(--bg-sidebar);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -146,17 +177,191 @@
   font-size: 0.75rem;
 }
 
-/* Responsive Grid Systems */
+/* --------------------------------------------------------------------------
+   Header Global Search & Command Palette Trigger
+   -------------------------------------------------------------------------- */
+.header-search-trigger {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 34px;
+  padding: 0 12px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  color: var(--text-tertiary);
+  font-size: 0.8125rem;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  min-width: 240px;
+  max-width: 320px;
+}
+
+.header-search-trigger:hover {
+  background: var(--bg-surface-elevated);
+  border-color: var(--border-strong);
+  color: var(--text-secondary);
+}
+
+.header-search-trigger:focus-visible {
+  outline: 2px solid var(--accent-cyan);
+  outline-offset: 1px;
+}
+
+.header-kbd-badge {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  color: var(--text-tertiary);
+  padding: 1px 6px;
+  border-radius: var(--radius-xs);
+  background: var(--bg-surface-elevated);
+  border: 1px solid var(--border-subtle);
+}
+
+/* --------------------------------------------------------------------------
+   Ctrl+K Command Palette Modal
+   -------------------------------------------------------------------------- */
+.cmd-palette-backdrop {
+  position: fixed;
+  inset: 0;
+  background-color: var(--overlay-backdrop);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  z-index: 1000;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 10vh 16px 24px;
+}
+
+.cmd-palette-dialog {
+  width: 100%;
+  max-width: 580px;
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-popover);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.cmd-palette-input-wrap {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--bg-surface);
+}
+
+.cmd-palette-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  font-size: 0.9375rem;
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+}
+
+.cmd-palette-input::placeholder {
+  color: var(--text-tertiary);
+}
+
+.cmd-palette-results {
+  max-height: 360px;
+  overflow-y: auto;
+  padding: 8px;
+}
+
+.cmd-palette-results::-webkit-scrollbar {
+  width: 4px;
+}
+.cmd-palette-results::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+}
+
+.cmd-group-label {
+  padding: 8px 12px 4px;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+
+.cmd-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 9px 12px;
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  font-size: 0.84375rem;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.cmd-item:hover,
+.cmd-item.selected {
+  background: var(--bg-surface-elevated);
+  color: var(--text-primary);
+}
+
+.cmd-item.selected {
+  border-left: 2px solid var(--accent-cyan);
+}
+
+.cmd-item-badge {
+  font-size: 0.6875rem;
+  color: var(--text-tertiary);
+  padding: 2px 6px;
+  border-radius: var(--radius-xs);
+  background: var(--bg-app);
+  border: 1px solid var(--border-subtle);
+}
+
+.cmd-palette-footer {
+  padding: 10px 18px;
+  border-top: 1px solid var(--border-subtle);
+  background: var(--bg-sidebar);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.71875rem;
+  color: var(--text-tertiary);
+}
+
+.cmd-palette-kbd-hints {
+  display: flex;
+  gap: 12px;
+}
+
+.cmd-palette-kbd-hints span {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.cmd-palette-kbd-hints kbd {
+  font-family: var(--font-mono);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: 3px;
+  padding: 1px 4px;
+  color: var(--text-secondary);
+}
+
+/* --------------------------------------------------------------------------
+   Responsive Grid & Breakpoint System
+   -------------------------------------------------------------------------- */
 .grid-12 {
   display: grid;
   grid-template-columns: repeat(12, 1fr);
-  gap: var(--space-lg);
-}
-
-.dense-grid-5 {
-  display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  gap: var(--space-lg);
+  gap: var(--space-xl);
 }
 
 .dense-grid-4 {
@@ -174,7 +379,7 @@
 .dense-grid-2 {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: var(--space-lg);
+  gap: var(--space-xl);
 }
 
 .col-12 { grid-column: span 12; }
@@ -186,18 +391,20 @@
 .col-4 { grid-column: span 4; }
 .col-3 { grid-column: span 3; }
 
-/* Mobile Bottom Navigation Bar */
+/* --------------------------------------------------------------------------
+   Mobile Navigation Rail
+   -------------------------------------------------------------------------- */
 .mobile-bottom-nav {
   display: none;
   position: fixed;
   bottom: 0;
   left: 0;
   right: 0;
-  height: 60px;
-  background: rgba(8, 11, 18, 0.96);
+  height: 56px;
+  background: rgba(10, 12, 17, 0.96);
   border-top: 1px solid var(--border-subtle);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
   z-index: 50;
   justify-content: space-around;
   align-items: center;
@@ -214,34 +421,30 @@
   background: none;
   border: none;
   font-size: 0.6875rem;
-  padding: 6px 12px;
+  padding: 6px 10px;
   border-radius: var(--radius-md);
   cursor: pointer;
 }
 
 .mobile-nav-btn.active {
-  color: var(--color-purple-400);
+  color: var(--accent-cyan);
 }
 
-@media (max-width: 1280px) {
+@media (max-width: 1200px) {
   .col-9, .col-8, .col-7 { grid-column: span 12; }
-  .col-6, .col-5, .col-4 { grid-column: span 6; }
-  .col-3 { grid-column: span 6; }
-  .dense-grid-5 { grid-template-columns: repeat(3, 1fr); }
+  .col-6, .col-5, .col-4 { grid-column: span 12; }
   .dense-grid-4 { grid-template-columns: repeat(2, 1fr); }
-  .dense-grid-3 { grid-template-columns: repeat(1, 1fr); }
+  .dense-grid-3 { grid-template-columns: repeat(2, 1fr); }
+  .dense-grid-2 { grid-template-columns: repeat(1, 1fr); }
 }
 
 @media (max-width: 768px) {
   .app-sidebar { display: none; }
   .mobile-bottom-nav { display: flex; }
-  .app-content { padding: var(--space-md) var(--space-md) 80px; }
-  .col-6, .col-5, .col-4, .col-3 { grid-column: span 12; }
-  .dense-grid-5 { grid-template-columns: repeat(2, 1fr); }
-  .dense-grid-4, .dense-grid-2 { grid-template-columns: repeat(1, 1fr); }
+  .app-content { padding: var(--space-md) var(--space-md) 72px; }
+  .col-3 { grid-column: span 12; }
+  .dense-grid-4 { grid-template-columns: repeat(1, 1fr); }
+  .dense-grid-3 { grid-template-columns: repeat(1, 1fr); }
   .app-header { padding: 0 var(--space-md); }
-}
-
-@media (max-width: 480px) {
-  .dense-grid-5 { grid-template-columns: repeat(1, 1fr); }
+  .header-search-trigger { min-width: 160px; }
 }

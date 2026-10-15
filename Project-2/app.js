@@ -626,6 +626,8 @@ function DateRangeFilterDropdown({ id = 'dateRange', label = 'Date Range', dateR
   );
 
   const SparklesIcon = createIcon(['M12 3l1.912 5.813a2 2 0 001.275 1.275L21 12l-5.813 1.912a2 2 0 00-1.275 1.275L12 21l-1.912-5.813a2 2 0 00-1.275-1.275L3 12l5.813-1.912a2 2 0 001.275-1.275L12 3z']);
+  const SearchIcon = createIcon(['M11 19a8 8 0 100-16 8 8 0 000 16z', 'M21 21l-4.35-4.35']);
+  const CommandIcon = createIcon(['M18 3a3 3 0 00-3 3v12a3 3 0 003 3 3 3 0 003-3 3 3 0 00-3-3H6a3 3 0 00-3 3 3 3 0 003 3 3 3 0 003-3V6a3 3 0 00-3-3 3 3 0 00-3 3 3 3 0 003 3h12a3 3 0 003-3 3 3 0 00-3-3z']);
   const MailIcon = createIcon(['M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z', 'M22 6l-10 7L2 6']);
   const LockIcon = createIcon(['M19 11H5a2 2 0 00-2 2v7a2 2 0 002 2h14a2 2 0 002-2v-7a2 2 0 00-2-2z', 'M7 11V7a5 5 0 0110 0v4']);
   const UserIcon = createIcon(['M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2', 'M12 11a4 4 0 100-8 4 4 0 000 8z']);
@@ -5347,6 +5349,35 @@ window.CANONICAL_PROJECTS = CANONICAL_PROJECTS;
     const [activeNav, setActiveNav] = React.useState(getNavFromLocation);
     const [isSidebarCollapsed, setIsSidebarCollapsed] = React.useState(false);
     const [isUserMenuOpen, setIsUserMenuOpen] = React.useState(false);
+    const [isCommandPaletteOpen, setIsCommandPaletteOpen] = React.useState(false);
+    const [cmdPaletteQuery, setCmdPaletteQuery] = React.useState('');
+    const [cmdPaletteSelectedIndex, setCmdPaletteSelectedIndex] = React.useState(0);
+    const cmdPaletteInputRef = React.useRef(null);
+
+    /* Ctrl+K / Cmd+K Global Shortcut for Command Palette */
+    React.useEffect(() => {
+      const handleGlobalKeyDown = (e) => {
+        if ((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'K')) {
+          e.preventDefault();
+          setIsCommandPaletteOpen(prev => !prev);
+          setCmdPaletteQuery('');
+          setCmdPaletteSelectedIndex(0);
+        } else if (e.key === 'Escape' && isCommandPaletteOpen) {
+          setIsCommandPaletteOpen(false);
+        }
+      };
+      window.addEventListener('keydown', handleGlobalKeyDown);
+      return () => window.removeEventListener('keydown', handleGlobalKeyDown);
+    }, [isCommandPaletteOpen]);
+
+    /* Auto-focus command palette input on open */
+    React.useEffect(() => {
+      if (isCommandPaletteOpen) {
+        setTimeout(() => {
+          if (cmdPaletteInputRef.current) cmdPaletteInputRef.current.focus();
+        }, 50);
+      }
+    }, [isCommandPaletteOpen]);
 
     /* Sync activeNav with Browser Back/Forward and direct URL hashes */
     React.useEffect(() => {
@@ -12400,6 +12431,7 @@ window.CANONICAL_PROJECTS = CANONICAL_PROJECTS;
     const [isSearchOpen, setIsSearchOpen] = React.useState(false);
     const [isNotificationsOpen, setIsNotificationsOpen] = React.useState(false);
     const [dashboardTimeframe, setDashboardTimeframe] = React.useState('30D');
+    const [overviewMetricTab, setOverviewMetricTab] = React.useState('revenue'); // 'revenue' | 'profit' | 'orders' | 'customers'
 
     /* Intelligence Cards UX Controls */
     const [cardGeoMetric, setCardGeoMetric] = React.useState('revenue'); // 'revenue' | 'orders' | 'customers'
@@ -13655,6 +13687,56 @@ window.CANONICAL_PROJECTS = CANONICAL_PROJECTS;
         }))
       })).filter(group => group.items.length > 0);
 
+      const commandPaletteItems = (() => {
+        const q = (cmdPaletteQuery || '').trim().toLowerCase();
+        const items = [
+          // Navigation
+          { id: 'nav-overview', label: 'Overview Dashboard', category: 'Navigation', icon: BarChart2Icon, action: () => handleNavigate('overview'), badge: 'Overview' },
+          { id: 'nav-analytics', label: 'Analytics Studio', category: 'Navigation', icon: LayersIcon, action: () => handleNavigate('analytics'), badge: 'Studio' },
+          { id: 'nav-datasets', label: 'Datasets Explorer', category: 'Navigation', icon: DatabaseIcon, action: () => handleNavigate('datasets'), badge: 'Data' },
+          { id: 'nav-forecasting', label: 'AI Forecasting Engine', category: 'Navigation', icon: TrendingUpIcon, action: () => handleNavigate('forecasting'), badge: 'Forecast' },
+          { id: 'nav-anomaly', label: 'Statistical Anomaly Center', category: 'Navigation', icon: AlertCircleIcon, action: () => handleNavigate('anomaly'), badge: 'Quality' },
+          { id: 'nav-geo', label: 'Geographic Intelligence', category: 'Navigation', icon: GlobeIcon, action: () => handleNavigate('geo'), badge: 'Spatial' },
+          { id: 'nav-brief', label: 'Executive AI Brief', category: 'Navigation', icon: SparklesIcon, action: () => handleNavigate('brief'), badge: 'Executive' },
+          { id: 'nav-copilot', label: 'Conversational AI Copilot', category: 'Navigation', icon: SparklesIcon, action: () => handleNavigate('copilot'), badge: 'AI Copilot' },
+          { id: 'nav-projects', label: 'Shared Enterprise Projects', category: 'Navigation', icon: FolderIcon, action: () => handleNavigate('projects'), badge: 'Projects' },
+          { id: 'nav-settings', label: 'System Settings & Config', category: 'Navigation', icon: CpuIcon, action: () => handleNavigate('settings'), badge: 'Config' },
+          { id: 'nav-profile', label: 'User Profile & Security', category: 'Navigation', icon: UserIcon, action: () => handleNavigate('profile'), badge: 'Account' },
+
+          // Actions
+          { id: 'act-upload', label: 'Upload New Dataset', category: 'Actions', icon: PlusIcon, action: () => handleNavigate('upload'), badge: 'Action' },
+          { id: 'act-switch-role', label: 'Switch Workspace Role', category: 'Actions', icon: UserIcon, action: () => { setSelectedSwitchRole(getCanonicalRole(userProfile?.role) || 'data_analyst'); setSwitchRoleError(null); setIsSwitchRoleModalOpen(true); }, badge: 'Role' },
+          { id: 'act-clear-filters', label: 'Clear Active Filters', category: 'Actions', icon: RefreshCwIcon, action: () => setGlobalFilters({ dateRange: 'All Time', startDate: '', endDate: '', region: [], country: [], category: [], product: [], segment: [] }), badge: 'Filter' },
+          { id: 'act-signout', label: 'Sign Out of Workspace', category: 'Actions', icon: LockIcon, action: handleSignOut, badge: 'Session' }
+        ];
+
+        // Datasets
+        if (Array.isArray(userDatasets) && userDatasets.length > 0) {
+          userDatasets.forEach(ds => {
+            const dsName = ds.name || ds.original_filename || 'Dataset';
+            items.push({
+              id: `ds-${ds.id}`,
+              label: dsName,
+              category: 'Datasets',
+              icon: DatabaseIcon,
+              action: () => {
+                setActiveDatasetId(ds.id);
+                try { localStorage.setItem('insightiq_active_dataset_id', ds.id); } catch (e) {}
+                handleNavigate('overview');
+              },
+              badge: `${(ds.file_type || 'CSV').toUpperCase()} • ${(ds.row_count || 0).toLocaleString()} rows`
+            });
+          });
+        }
+
+        if (!q) return items;
+        return items.filter(item =>
+          item.label.toLowerCase().includes(q) ||
+          item.category.toLowerCase().includes(q) ||
+          (item.badge && item.badge.toLowerCase().includes(q))
+        );
+      })();
+
       return (
         React.createElement('div', { className: 'app-container' },
           /* LEFT NAVIGATION SIDEBAR RAIL */
@@ -13662,20 +13744,21 @@ window.CANONICAL_PROJECTS = CANONICAL_PROJECTS;
             /* Sidebar Brand Banner */
             React.createElement('div', { style: { height: 'var(--header-height)', borderBottom: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 16px' } },
               React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }, onClick: () => handleNavigate('overview') },
-                React.createElement('div', { style: { width: 32, height: 32, borderRadius: 8, background: 'linear-gradient(135deg, #8B5CF6, #3B82F6)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', boxShadow: '0 4px 12px rgba(139, 92, 246, 0.4)' } },
+                React.createElement('div', { style: { width: 32, height: 32, borderRadius: 'var(--radius-md)', background: 'linear-gradient(135deg, rgba(0, 210, 255, 0.2), rgba(0, 100, 255, 0.25))', border: '1px solid rgba(0, 210, 255, 0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--accent-cyan)' } },
                   React.createElement(SparklesIcon, { size: 18 })
                 ),
                 !isSidebarCollapsed && React.createElement('div', { style: { display: 'flex', flexDirection: 'column' } },
-                  React.createElement('span', { className: 'font-title', style: { fontSize: '0.9375rem', fontWeight: 700, letterSpacing: '-0.02em', color: '#fff' } },
-                    'InsightIQ ', React.createElement('span', { style: { color: '#38BDF8' } }, 'AI')
+                  React.createElement('span', { className: 'font-title', style: { fontSize: '0.9375rem', fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--text-primary)' } },
+                    'InsightIQ ', React.createElement('span', { style: { color: 'var(--accent-cyan)' } }, 'AI')
                   ),
-                  React.createElement('span', { style: { fontSize: '0.625rem', color: 'var(--text-tertiary)', letterSpacing: '0.05em', fontWeight: 600 } }, 'ENTERPRISE BI')
+                  React.createElement('span', { style: { fontSize: '0.625rem', color: 'var(--text-tertiary)', letterSpacing: '0.08em', fontWeight: 600 } }, 'INTELLIGENCE, DISTILLED')
                 )
               ),
               React.createElement('button', {
                 className: 'btn btn-ghost btn-sm',
                 onClick: () => setIsSidebarCollapsed(!isSidebarCollapsed),
-                style: { padding: 6, color: 'var(--text-tertiary)' }
+                style: { padding: 6, color: 'var(--text-tertiary)' },
+                'aria-label': 'Toggle Sidebar'
               }, React.createElement(SidebarIcon, { size: 18 }))
             ),
 
@@ -13691,7 +13774,7 @@ window.CANONICAL_PROJECTS = CANONICAL_PROJECTS;
                   React.createElement(item.icon, { size: 18 }),
                   !isSidebarCollapsed && React.createElement('span', { style: { flex: 1 } }, item.label),
                   !isSidebarCollapsed && item.badge && React.createElement('span', { className: 'ai-badge', style: { padding: '1px 6px', fontSize: '0.625rem' } }, item.badge),
-                  !isSidebarCollapsed && item.count > 0 && React.createElement('span', { style: { background: 'rgba(139, 92, 246, 0.25)', color: '#a78bfa', padding: '1px 6px', borderRadius: 10, fontSize: '0.6875rem', fontWeight: 600 } }, item.count)
+                  !isSidebarCollapsed && item.count > 0 && React.createElement('span', { style: { background: 'rgba(0, 210, 255, 0.15)', color: 'var(--accent-cyan)', padding: '1px 6px', borderRadius: 10, fontSize: '0.6875rem', fontWeight: 600 } }, item.count)
                 ))
               ))
             )
@@ -13719,48 +13802,21 @@ window.CANONICAL_PROJECTS = CANONICAL_PROJECTS;
           React.createElement('div', { className: 'app-main-wrapper' },
             /* TOP BAR HEADER */
             React.createElement('header', { className: 'app-header' },
-              /* Global Search Input Bar */
+              /* Global Command Palette Trigger */
               React.createElement('div', { style: { position: 'relative' } },
-                React.createElement('div', { className: 'global-search-bar', onClick: () => setIsSearchOpen(true) },
-                  React.createElement(EyeIcon, { size: 16, color: 'var(--text-tertiary)' }),
-                  React.createElement('input', {
-                    type: 'text',
-                    placeholder: 'Search datasets, AI briefs, reports, metrics...',
-                    className: 'global-search-input',
-                    value: globalSearchQuery,
-                    onChange: (e) => { setGlobalSearchQuery(e.target.value); setIsSearchOpen(true); }
-                  }),
-                  React.createElement('span', { className: 'kbd-shortcut' }, '/')
-                ),
-
-                /* Search Results Popover Dropdown */
-                isSearchOpen && globalSearchQuery.trim() && React.createElement('div', {
-                  className: 'animate-fade-in',
-                  style: {
-                    position: 'absolute', top: '100%', left: 0, marginTop: 8, zIndex: 60,
-                    backgroundColor: 'var(--bg-surface-elevated)', border: '1px solid var(--border-strong)',
-                    borderRadius: 'var(--radius-lg)', boxShadow: 'var(--shadow-xl)', padding: 12, width: 380
-                  }
-                },
-                  React.createElement('div', { className: 'font-caption', style: { color: 'var(--text-tertiary)', marginBottom: 8, fontWeight: 600 } }, 'QUICK MATCHES'),
-                  [
-                    { title: 'Overview Dashboard', category: 'Page', nav: 'overview' },
-                    { title: 'Revenue & Profit Performance', category: 'Analytics', nav: 'analytics' },
-                    { title: 'Customer Churn Telemetry', category: 'Dataset', nav: 'datasets' },
-                    { title: '90-Day AI Forecasting Model', category: 'AI Model', nav: 'forecasting' },
-                    { title: 'Executive AI Brief', category: 'Brief', nav: 'brief' },
-                    { title: 'Geographic Regional Telemetry', category: 'Geo', nav: 'geo' }
-                  ].filter(m => m.title.toLowerCase().includes(globalSearchQuery.toLowerCase()))
-                  .map((match, idx) => React.createElement('div', {
-                    key: idx,
-                    onClick: () => { handleNavigate(match.nav); setIsSearchOpen(false); setGlobalSearchQuery(''); },
-                    style: { padding: '8px 10px', borderRadius: 'var(--radius-md)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 },
-                    onMouseEnter: (e) => e.currentTarget.style.backgroundColor = 'var(--bg-surface-hover)',
-                    onMouseLeave: (e) => e.currentTarget.style.backgroundColor = 'transparent'
+                React.createElement('button', {
+                  type: 'button',
+                  className: 'header-search-trigger',
+                  onClick: () => {
+                    setIsCommandPaletteOpen(true);
+                    setCmdPaletteQuery('');
+                    setCmdPaletteSelectedIndex(0);
                   },
-                    React.createElement('span', { style: { fontSize: '0.84375rem', fontWeight: 500 } }, match.title),
-                    React.createElement('span', { className: 'kpi-delta-pill kpi-delta-neutral', style: { fontSize: '0.6875rem' } }, match.category)
-                  ))
+                  title: 'Open Command Palette (Ctrl+K or Cmd+K)'
+                },
+                  React.createElement(SearchIcon, { size: 15, color: 'var(--text-tertiary)' }),
+                  React.createElement('span', null, 'Search or run command...'),
+                  React.createElement('span', { className: 'header-kbd-badge' }, '⌘K')
                 )
               ),
 
@@ -14288,6 +14344,98 @@ window.CANONICAL_PROJECTS = CANONICAL_PROJECTS;
               )
             ),
 
+            /* CTRL+K COMMAND PALETTE MODAL */
+            isCommandPaletteOpen && React.createElement('div', {
+              id: 'cmd-palette-backdrop',
+              className: 'cmd-palette-backdrop animate-fade-in',
+              onClick: (e) => {
+                if (e.target === e.currentTarget) setIsCommandPaletteOpen(false);
+              }
+            },
+              React.createElement('div', {
+                className: 'cmd-palette-dialog animate-scale-up',
+                role: 'dialog',
+                'aria-modal': 'true',
+                'aria-label': 'Command Palette'
+              },
+                /* Search Input Wrap */
+                React.createElement('div', { className: 'cmd-palette-input-wrap' },
+                  React.createElement(SearchIcon, { size: 18, color: 'var(--text-tertiary)' }),
+                  React.createElement('input', {
+                    ref: cmdPaletteInputRef,
+                    type: 'text',
+                    className: 'cmd-palette-input',
+                    placeholder: 'Type a command, page, or dataset name...',
+                    value: cmdPaletteQuery,
+                    onChange: (e) => {
+                      setCmdPaletteQuery(e.target.value);
+                      setCmdPaletteSelectedIndex(0);
+                    },
+                    onKeyDown: (e) => {
+                      if (e.key === 'ArrowDown') {
+                        e.preventDefault();
+                        if (commandPaletteItems.length > 0) {
+                          setCmdPaletteSelectedIndex(prev => (prev + 1) % commandPaletteItems.length);
+                        }
+                      } else if (e.key === 'ArrowUp') {
+                        e.preventDefault();
+                        if (commandPaletteItems.length > 0) {
+                          setCmdPaletteSelectedIndex(prev => (prev - 1 + commandPaletteItems.length) % commandPaletteItems.length);
+                        }
+                      } else if (e.key === 'Enter') {
+                        e.preventDefault();
+                        if (commandPaletteItems[cmdPaletteSelectedIndex]) {
+                          commandPaletteItems[cmdPaletteSelectedIndex].action();
+                          setIsCommandPaletteOpen(false);
+                        }
+                      } else if (e.key === 'Escape') {
+                        e.preventDefault();
+                        setIsCommandPaletteOpen(false);
+                      }
+                    }
+                  }),
+                  React.createElement('span', { className: 'header-kbd-badge', style: { cursor: 'pointer' }, onClick: () => setIsCommandPaletteOpen(false) }, 'ESC')
+                ),
+
+                /* Results List */
+                React.createElement('div', { className: 'cmd-palette-results' },
+                  commandPaletteItems.length === 0 ? React.createElement('div', {
+                    style: { padding: '32px 16px', textAlign: 'center', color: 'var(--text-tertiary)', fontSize: '0.875rem' }
+                  },
+                    React.createElement('div', { style: { marginBottom: 6, fontSize: '1.25rem' } }, '🔍'),
+                    React.createElement('div', null, `No commands or datasets matching "${cmdPaletteQuery}"`)
+                  ) : commandPaletteItems.map((item, idx) => {
+                    const isSelected = idx === cmdPaletteSelectedIndex;
+                    return React.createElement('div', {
+                      key: item.id,
+                      className: `cmd-item ${isSelected ? 'selected' : ''}`,
+                      onClick: () => {
+                        item.action();
+                        setIsCommandPaletteOpen(false);
+                      },
+                      onMouseEnter: () => setCmdPaletteSelectedIndex(idx)
+                    },
+                      React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 10 } },
+                        React.createElement(item.icon, { size: 16, color: isSelected ? 'var(--accent-cyan)' : 'var(--text-secondary)' }),
+                        React.createElement('span', { style: { fontWeight: isSelected ? 600 : 400 } }, item.label)
+                      ),
+                      React.createElement('span', { className: 'cmd-item-badge' }, item.badge || item.category)
+                    );
+                  })
+                ),
+
+                /* Palette Footer */
+                React.createElement('div', { className: 'cmd-palette-footer' },
+                  React.createElement('div', { className: 'cmd-palette-kbd-hints' },
+                    React.createElement('span', null, React.createElement('kbd', null, '↑↓'), ' Navigate'),
+                    React.createElement('span', null, React.createElement('kbd', null, '↵'), ' Select'),
+                    React.createElement('span', null, React.createElement('kbd', null, 'ESC'), ' Close')
+                  ),
+                  React.createElement('span', null, `${commandPaletteItems.length} available commands`)
+                )
+              )
+            ),
+
             /* FLOATING SUCCESS TOAST */
             roleToastMessage && React.createElement('div', {
               id: 'role-success-toast',
@@ -14556,8 +14704,8 @@ window.CANONICAL_PROJECTS = CANONICAL_PROJECTS;
                     /* 1. TOP DASHBOARD HEADER BAR */
                     React.createElement('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 } },
                       React.createElement('div', null,
-                        React.createElement('h1', { style: { fontSize: '1.5rem', fontWeight: 700, letterSpacing: '-0.02em', color: '#fff', margin: 0 } }, `${timeGreeting}, ${userFirstName} 👋`),
-                        React.createElement('p', { style: { fontSize: '0.84375rem', color: 'var(--text-secondary)', margin: '4px 0 0 0' } }, 'Real-time AI-powered business intelligence & decision support.')
+                        React.createElement('h1', { style: { fontSize: '1.5rem', fontWeight: 700, letterSpacing: '-0.02em', color: '#F0F2F6', margin: 0 } }, `${timeGreeting}, ${userFirstName} 👋`),
+                        React.createElement('p', { style: { fontSize: '0.84375rem', color: 'var(--text-secondary)', margin: '4px 0 0 0', letterSpacing: '0.01em' } }, 'DATA ANALYST WORKSPACE • Intelligence, distilled.')
                       ),
                       React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' } },
                         /* ACTIVE DATASET SELECTOR CONTROL (Portal Rendered Popover for High Z-Index & Clean Positioning) */
@@ -14576,9 +14724,9 @@ window.CANONICAL_PROJECTS = CANONICAL_PROJECTS;
                           value: systemCurrency,
                           onChange: (e) => setSystemCurrency(e.target.value),
                           style: {
-                            height: 40, padding: '0 12px', borderRadius: '12px',
-                            backgroundColor: '#111827', border: '1px solid rgba(56, 189, 248, 0.35)',
-                            color: '#38BDF8', fontSize: '0.875rem', fontWeight: 600, cursor: 'pointer'
+                            height: 38, padding: '0 12px', borderRadius: '10px',
+                            backgroundColor: '#0E1118', border: '1px solid rgba(255, 255, 255, 0.08)',
+                            color: '#F0F2F6', fontSize: '0.8125rem', fontWeight: 600, cursor: 'pointer'
                           }
                         },
                           React.createElement('option', { value: 'USD' }, 'USD ($)'),
@@ -14591,20 +14739,20 @@ window.CANONICAL_PROJECTS = CANONICAL_PROJECTS;
                           type: 'button',
                           onClick: () => setShowKpiDebugPanel(!showKpiDebugPanel),
                           style: {
-                            height: 40, padding: '0 12px', borderRadius: '12px',
-                            backgroundColor: showKpiDebugPanel ? 'rgba(56, 189, 248, 0.2)' : '#111827',
-                            border: '1px solid rgba(56, 189, 248, 0.35)',
-                            color: showKpiDebugPanel ? '#38BDF8' : '#9CA3AF',
-                            fontSize: '0.8125rem', fontWeight: 600, cursor: 'pointer'
+                            height: 38, padding: '0 12px', borderRadius: '10px',
+                            backgroundColor: showKpiDebugPanel ? 'rgba(0, 210, 255, 0.15)' : '#0E1118',
+                            border: showKpiDebugPanel ? '1px solid rgba(0, 210, 255, 0.4)' : '1px solid rgba(255, 255, 255, 0.08)',
+                            color: showKpiDebugPanel ? 'var(--brand-cyan)' : 'var(--text-secondary)',
+                            fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer'
                           }
                         }, showKpiDebugPanel ? '🛠️ Debug: ON' : '🛠️ Debug: OFF'),
                         React.createElement('button', {
                           className: 'btn-secondary-action',
                           onClick: () => handleNavigate('upload'),
-                          style: { height: 40, borderRadius: '12px', display: 'inline-flex', alignItems: 'center', gap: 8, padding: '0 16px', fontSize: '0.875rem', fontWeight: 600 }
-                        }, React.createElement(PlusIcon, { size: 16, color: '#38BDF8' }), 'Upload Dataset'),
+                          style: { height: 38, borderRadius: '10px', display: 'inline-flex', alignItems: 'center', gap: 8, padding: '0 14px', fontSize: '0.8125rem', fontWeight: 600 }
+                        }, React.createElement(PlusIcon, { size: 14, color: 'var(--brand-cyan)' }), 'Upload Dataset'),
 
-                        /* COMPACT ACTION MENU POPOVER [ ⋮ ] (Requirement 1) */
+                        /* COMPACT ACTION MENU POPOVER [ ⋮ ] */
                         selectedDs && React.createElement('div', { style: { position: 'relative' } },
                           React.createElement('button', {
                             type: 'button',
@@ -14612,9 +14760,9 @@ window.CANONICAL_PROJECTS = CANONICAL_PROJECTS;
                             onClick: () => setIsDatasetActionMenuOpen(!isDatasetActionMenuOpen),
                             title: 'Dataset Actions',
                             style: {
-                              height: 40, width: 40, padding: 0, borderRadius: '12px',
-                              backgroundColor: '#111827', border: '1px solid rgba(56, 189, 248, 0.35)',
-                              color: '#F9FAFB', fontSize: '1.25rem', fontWeight: 700, cursor: 'pointer',
+                              height: 38, width: 38, padding: 0, borderRadius: '10px',
+                              backgroundColor: '#0E1118', border: '1px solid rgba(255, 255, 255, 0.08)',
+                              color: '#F0F2F6', fontSize: '1.125rem', fontWeight: 700, cursor: 'pointer',
                               display: 'inline-flex', alignItems: 'center', justifyContent: 'center'
                             }
                           }, '⋮'),
@@ -14622,8 +14770,8 @@ window.CANONICAL_PROJECTS = CANONICAL_PROJECTS;
                             className: 'animate-fade-in',
                             style: {
                               position: 'absolute', top: '100%', right: 0, marginTop: 8, zIndex: 110,
-                              backgroundColor: '#111827', border: '1px solid rgba(255, 255, 255, 0.15)',
-                              borderRadius: '12px', boxShadow: '0 12px 32px rgba(0, 0, 0, 0.6)', padding: 6, width: 210
+                              backgroundColor: '#0E1118', border: '1px solid rgba(255, 255, 255, 0.1)',
+                              borderRadius: '12px', boxShadow: '0 12px 32px rgba(0, 0, 0, 0.7)', padding: 6, width: 200
                             }
                           },
                             React.createElement('button', {
@@ -14632,7 +14780,7 @@ window.CANONICAL_PROJECTS = CANONICAL_PROJECTS;
                                 setIsDatasetActionMenuOpen(false);
                                 setRenameModalState({ isOpen: true, dataset: selectedDs, newName: selectedDs.name || selectedDs.original_filename || '', isSaving: false, error: null });
                               },
-                              style: { width: '100%', padding: '9px 12px', borderRadius: '8px', border: 'none', backgroundColor: 'transparent', color: '#E2E8F0', fontSize: '0.84375rem', fontWeight: 500, textAlign: 'left', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }
+                              style: { width: '100%', padding: '8px 12px', borderRadius: '8px', border: 'none', backgroundColor: 'transparent', color: '#F0F2F6', fontSize: '0.8125rem', fontWeight: 500, textAlign: 'left', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }
                             }, '✏️ Rename Dataset'),
                             React.createElement('button', {
                               type: 'button',
@@ -14640,7 +14788,7 @@ window.CANONICAL_PROJECTS = CANONICAL_PROJECTS;
                                 setIsDatasetActionMenuOpen(false);
                                 handleDownloadDataset(selectedDs);
                               },
-                              style: { width: '100%', padding: '9px 12px', borderRadius: '8px', border: 'none', backgroundColor: 'transparent', color: '#E2E8F0', fontSize: '0.84375rem', fontWeight: 500, textAlign: 'left', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }
+                              style: { width: '100%', padding: '8px 12px', borderRadius: '8px', border: 'none', backgroundColor: 'transparent', color: '#F0F2F6', fontSize: '0.8125rem', fontWeight: 500, textAlign: 'left', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }
                             }, '⬇️ Download Dataset'),
                             React.createElement('button', {
                               type: 'button',
@@ -14648,7 +14796,7 @@ window.CANONICAL_PROJECTS = CANONICAL_PROJECTS;
                                 setIsDatasetActionMenuOpen(false);
                                 handleReprocessDataset(selectedDs);
                               },
-                              style: { width: '100%', padding: '9px 12px', borderRadius: '8px', border: 'none', backgroundColor: 'transparent', color: '#E2E8F0', fontSize: '0.84375rem', fontWeight: 500, textAlign: 'left', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }
+                              style: { width: '100%', padding: '8px 12px', borderRadius: '8px', border: 'none', backgroundColor: 'transparent', color: '#F0F2F6', fontSize: '0.8125rem', fontWeight: 500, textAlign: 'left', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }
                             }, '🔄 Reprocess Dataset'),
                             React.createElement('div', { style: { height: 1, backgroundColor: 'rgba(255, 255, 255, 0.08)', margin: '4px 0' } }),
                             React.createElement('button', {
@@ -14657,19 +14805,19 @@ window.CANONICAL_PROJECTS = CANONICAL_PROJECTS;
                                 setIsDatasetActionMenuOpen(false);
                                 setDeleteModalState({ isOpen: true, dataset: selectedDs, typedConfirmName: '', isDeleting: false, deleteError: null });
                               },
-                              style: { width: '100%', padding: '9px 12px', borderRadius: '8px', border: 'none', backgroundColor: 'rgba(248, 113, 113, 0.1)', color: '#F87171', fontSize: '0.84375rem', fontWeight: 600, textAlign: 'left', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }
+                              style: { width: '100%', padding: '8px 12px', borderRadius: '8px', border: 'none', backgroundColor: 'rgba(248, 113, 113, 0.1)', color: '#F87171', fontSize: '0.8125rem', fontWeight: 600, textAlign: 'left', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }
                             }, '🗑️ Delete Dataset')
                           )
                         ),
                         React.createElement('button', {
                           className: 'btn-primary-action',
                           onClick: () => handleNavigate('brief'),
-                          style: { height: 40, borderRadius: '12px', display: 'inline-flex', alignItems: 'center', gap: 8, padding: '0 16px', fontSize: '0.875rem', fontWeight: 600 }
-                        }, React.createElement(SparklesIcon, { size: 16, color: '#FFFFFF' }), 'Generate Brief')
+                          style: { height: 38, borderRadius: '10px', display: 'inline-flex', alignItems: 'center', gap: 8, padding: '0 16px', fontSize: '0.8125rem', fontWeight: 600 }
+                        }, React.createElement(SparklesIcon, { size: 14, color: '#08090C' }), 'Generate Brief')
                       )
                     ),
 
-                    /* 2. DATASET CONTROL & METADATA PANEL */
+                    /* 2. COMPACT DATASET OVERVIEW STRIP */
                     (() => {
                       const dsName = selectedDs ? (selectedDs.name || selectedDs.original_filename) : 'No Dataset Selected';
                       const dsRowCount = selectedDs ? (selectedDs.row_count || rawRows.length || 0) : 0;
@@ -14679,72 +14827,134 @@ window.CANONICAL_PROJECTS = CANONICAL_PROJECTS;
                       const missingCellPct = isDatasetReady ? cols.reduce((a, c) => a + (c.missing_pct || 0), 0) / (cols.length || 1) : 0;
                       const qualityScore = isDatasetReady ? Math.max(10, Math.min(100, Math.round(100 - missingCellPct * 0.8))) : null;
 
-                      return React.createElement('div', { className: 'dataset-context-panel animate-fade-in' },
-                        React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 16 } },
+                      return React.createElement('div', {
+                        className: 'animate-fade-in',
+                        style: {
+                          backgroundColor: '#0E1118',
+                          border: '1px solid rgba(255, 255, 255, 0.06)',
+                          borderRadius: '14px',
+                          padding: '12px 18px',
+                          marginBottom: 20,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          flexWrap: 'wrap',
+                          gap: 14
+                        }
+                      },
+                        React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 12 } },
                           React.createElement('div', {
                             style: {
-                              width: 42, height: 42, borderRadius: '12px',
-                              backgroundColor: 'rgba(56, 189, 248, 0.15)', border: '1px solid rgba(56, 189, 248, 0.3)',
-                              display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#38BDF8'
+                              width: 36,
+                              height: 36,
+                              borderRadius: '10px',
+                              backgroundColor: 'rgba(0, 210, 255, 0.08)',
+                              border: '1px solid rgba(0, 210, 255, 0.25)',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              color: 'var(--brand-cyan)'
                             }
-                          }, React.createElement(DatabaseIcon, { size: 22 })),
+                          }, React.createElement(DatabaseIcon, { size: 18 })),
                           React.createElement('div', null,
-                            React.createElement('div', { className: 'dataset-context-label' }, 'ACTIVE DATASET CONTEXT'),
-                            React.createElement('div', { className: 'dataset-context-val', style: { fontSize: '1.0625rem', color: '#FFF' } }, dsName)
+                            React.createElement('div', {
+                              style: {
+                                fontSize: '0.6875rem',
+                                color: 'var(--text-tertiary)',
+                                fontWeight: 700,
+                                textTransform: 'uppercase',
+                                letterSpacing: '0.06em'
+                              }
+                            }, 'ACTIVE DATASET CONTEXT'),
+                            React.createElement('div', {
+                              style: {
+                                fontSize: '0.9375rem',
+                                fontWeight: 600,
+                                color: '#F0F2F6',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 8
+                              }
+                            },
+                              dsName,
+                              React.createElement('span', {
+                                style: {
+                                  fontSize: '0.6875rem',
+                                  padding: '2px 6px',
+                                  borderRadius: '4px',
+                                  backgroundColor: 'rgba(255, 255, 255, 0.06)',
+                                  color: 'var(--text-secondary)',
+                                  fontWeight: 600
+                                }
+                              }, fileFormat)
+                            )
                           )
                         ),
-                        React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 28, flexWrap: 'wrap' } },
-                          React.createElement('div', { className: 'dataset-context-item' },
-                            React.createElement('span', { className: 'dataset-context-label' }, 'TOTAL ROWS'),
-                            React.createElement('span', { className: 'dataset-context-val' }, dsRowCount.toLocaleString())
+                        React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 20, flexWrap: 'wrap' } },
+                          React.createElement('div', { style: { display: 'flex', flexDirection: 'column' } },
+                            React.createElement('span', { style: { fontSize: '0.6875rem', color: 'var(--text-tertiary)', fontWeight: 600 } }, 'TOTAL ROWS'),
+                            React.createElement('span', { style: { fontSize: '0.875rem', color: '#F0F2F6', fontWeight: 600 } }, dsRowCount.toLocaleString())
                           ),
-                          activeFilterCount > 0 && React.createElement('div', { className: 'dataset-context-item' },
-                            React.createElement('span', { className: 'dataset-context-label' }, 'FILTERED RECORDS'),
-                            React.createElement('span', { className: 'dataset-context-val', style: { color: '#38BDF8', fontWeight: 700 } }, `${activeRows.length.toLocaleString()} (${Math.round((activeRows.length / (dsRowCount || 1)) * 100)}%)`)
-                          ),
-                          React.createElement('div', { className: 'dataset-context-item' },
-                            React.createElement('span', { className: 'dataset-context-label' }, 'COLUMNS'),
-                            React.createElement('span', { className: 'dataset-context-val' }, dsColCount.toLocaleString())
-                          ),
-                          React.createElement('div', { className: 'dataset-context-item' },
-                            React.createElement('span', { className: 'dataset-context-label' }, 'FORMAT'),
-                            React.createElement('span', { className: 'dataset-context-val' }, fileFormat)
-                          ),
-                          React.createElement('div', { className: 'dataset-context-item' },
-                            React.createElement('span', { className: 'dataset-context-label' }, 'DATASET QUALITY'),
-                            React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 8 } },
-                              qualityScore !== null ? React.createElement(React.Fragment, null,
-                                React.createElement('span', { className: 'dataset-context-val', style: { color: qualityScore > 75 ? '#34D399' : '#FBBF24' } }, `${qualityScore}%`),
-                                React.createElement('span', { className: 'badge', style: { padding: '2px 6px', fontSize: '0.6875rem', backgroundColor: qualityScore > 75 ? 'rgba(52, 211, 153, 0.15)' : 'rgba(251, 191, 36, 0.15)', color: qualityScore > 75 ? '#34D399' : '#FBBF24' } },
-                                  qualityScore > 75 ? 'OPTIMAL' : 'MODERATE'
-                                )
-                              ) : React.createElement(React.Fragment, null,
-                                React.createElement('span', { className: 'dataset-context-val', style: { color: '#9CA3AF' } }, '—'),
-                                React.createElement('span', { className: 'badge', style: { padding: '2px 6px', fontSize: '0.6875rem', backgroundColor: 'rgba(156, 163, 175, 0.15)', color: '#9CA3AF' } }, schemaModuleState.status === 'loading' ? 'PROFILING...' : 'NOT PROFILED')
-                              )
+                          activeFilterCount > 0 && React.createElement('div', { style: { display: 'flex', flexDirection: 'column' } },
+                            React.createElement('span', { style: { fontSize: '0.6875rem', color: 'var(--text-tertiary)', fontWeight: 600 } }, 'FILTERED RECORDS'),
+                            React.createElement('span', { style: { fontSize: '0.875rem', color: 'var(--brand-cyan)', fontWeight: 700 } },
+                              `${activeRows.length.toLocaleString()} (${Math.round((activeRows.length / (dsRowCount || 1)) * 100)}%)`
                             )
+                          ),
+                          React.createElement('div', { style: { display: 'flex', flexDirection: 'column' } },
+                            React.createElement('span', { style: { fontSize: '0.6875rem', color: 'var(--text-tertiary)', fontWeight: 600 } }, 'COLUMNS'),
+                            React.createElement('span', { style: { fontSize: '0.875rem', color: '#F0F2F6', fontWeight: 600 } }, dsColCount.toLocaleString())
+                          ),
+                          React.createElement('div', { style: { display: 'flex', flexDirection: 'column' } },
+                            React.createElement('span', { style: { fontSize: '0.6875rem', color: 'var(--text-tertiary)', fontWeight: 600 } }, 'DATASET QUALITY'),
+                            qualityScore !== null ? React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 6 } },
+                              React.createElement('span', { style: { fontSize: '0.875rem', color: qualityScore > 75 ? '#34D399' : '#FBBF24', fontWeight: 700 } }, `${qualityScore}%`),
+                              React.createElement('span', {
+                                style: {
+                                  fontSize: '0.625rem',
+                                  padding: '1px 6px',
+                                  borderRadius: '4px',
+                                  backgroundColor: qualityScore > 75 ? 'rgba(52, 211, 153, 0.12)' : 'rgba(251, 191, 36, 0.12)',
+                                  color: qualityScore > 75 ? '#34D399' : '#FBBF24',
+                                  fontWeight: 700
+                                }
+                              }, qualityScore > 75 ? 'OPTIMAL' : 'MODERATE')
+                            ) : React.createElement('span', { style: { fontSize: '0.75rem', color: 'var(--text-tertiary)' } }, schemaModuleState.status === 'loading' ? 'PROFILING...' : 'NOT PROFILED')
                           ),
                           React.createElement('button', {
                             className: 'btn-secondary-action',
                             onClick: () => setIsDatasetDropdownOpen(true),
-                            style: { padding: '6px 14px', fontSize: '0.8125rem', borderRadius: '10px' }
+                            style: { padding: '5px 12px', fontSize: '0.78125rem', borderRadius: '8px' }
                           }, 'Change Dataset'),
                           selectedDs && React.createElement('button', {
                             type: 'button',
                             className: 'btn-secondary-action',
                             onClick: () => setDeleteModalState({ isOpen: true, dataset: selectedDs, typedConfirmName: '', isDeleting: false, deleteError: null }),
                             style: {
-                              padding: '6px 14px', fontSize: '0.8125rem', borderRadius: '10px',
-                              backgroundColor: 'rgba(248, 113, 113, 0.1)', border: '1px solid rgba(248, 113, 113, 0.3)',
-                              color: '#F87171', fontWeight: 600, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4
+                              padding: '5px 12px',
+                              fontSize: '0.78125rem',
+                              borderRadius: '8px',
+                              backgroundColor: 'rgba(248, 113, 113, 0.08)',
+                              border: '1px solid rgba(248, 113, 113, 0.25)',
+                              color: '#F87171',
+                              fontWeight: 600,
+                              cursor: 'pointer'
                             }
-                          }, '🗑️ Delete Dataset')
+                          }, '🗑️ Delete')
                         ),
                         (schemaModuleState.status === 'timeout' || (selectedDs && detailsFetchFailed && detailsFetchFailed[selectedDs.id])) && React.createElement('div', {
                           style: {
-                            width: '100%', padding: '10px 16px', borderRadius: '10px',
-                            backgroundColor: 'rgba(251, 191, 36, 0.12)', border: '1px solid rgba(251, 191, 36, 0.3)',
-                            color: '#FBBF24', fontSize: '0.8125rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 12
+                            width: '100%',
+                            padding: '8px 14px',
+                            borderRadius: '8px',
+                            backgroundColor: 'rgba(251, 191, 36, 0.1)',
+                            border: '1px solid rgba(251, 191, 36, 0.25)',
+                            color: '#FBBF24',
+                            fontSize: '0.78125rem',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            marginTop: 8
                           }
                         },
                           React.createElement('span', null, '⚠️ Dataset uploaded, but schema profiling timed out or encountered delay.'),
@@ -14757,13 +14967,13 @@ window.CANONICAL_PROJECTS = CANONICAL_PROJECTS;
                                 fetchDatasetDetails(selectedDs.id);
                               }
                             },
-                            style: { padding: '4px 12px', fontSize: '0.75rem', borderRadius: '6px', color: '#FBBF24', border: '1px solid rgba(251, 191, 36, 0.4)' }
+                            style: { padding: '3px 10px', fontSize: '0.72rem', borderRadius: '6px', color: '#FBBF24', border: '1px solid rgba(251, 191, 36, 0.35)' }
                           }, 'Retry Profiling')
                         )
                       );
                     })(),
 
-                    /* 3. GLOBAL FILTER TOOLBAR (Requirements 1 - 14) */
+                    /* 3. GLOBAL FILTER TOOLBAR */
                     (() => {
                       const activeFilterEntries = [];
                       if (globalFilters.dateRange && globalFilters.dateRange !== 'All Time') {
@@ -14791,24 +15001,49 @@ window.CANONICAL_PROJECTS = CANONICAL_PROJECTS;
                       const activeFilterCount = activeFilterEntries.length;
                       const dsRowCount = selectedDs ? (selectedDs.row_count || rawRows.length || 0) : 0;
                       const filteredRowCount = activeRows.length;
-
                       const isCustomDateInvalid = globalFilters.dateRange === 'Custom Range' && globalFilters.startDate && globalFilters.endDate && (new Date(globalFilters.startDate) > new Date(globalFilters.endDate));
 
                       return React.createElement('div', {
                         className: 'global-filter-toolbar animate-fade-in',
                         style: {
-                          position: 'relative', zIndex: 100, overflow: 'visible',
-                          marginBottom: 24, padding: '16px 20px', borderRadius: '16px',
-                          backgroundColor: '#111827', border: isCustomDateInvalid ? '1px solid #F87171' : '1px solid rgba(255, 255, 255, 0.08)',
-                          display: 'flex', flexDirection: 'column', gap: 12,
-                          boxShadow: '0 8px 24px rgba(0, 0, 0, 0.3)'
+                          position: 'relative',
+                          zIndex: 100,
+                          overflow: 'visible',
+                          marginBottom: 20,
+                          padding: '14px 18px',
+                          borderRadius: '14px',
+                          backgroundColor: '#0E1118',
+                          border: isCustomDateInvalid ? '1px solid #F87171' : '1px solid rgba(255, 255, 255, 0.06)',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: 12
                         }
                       },
-                        /* FIRST ROW: Filters + Showing X of Y records (Requirement 1 & 12) */
-                        React.createElement('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 } },
-                          React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' } },
-                            React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.75rem', fontWeight: 700, color: '#38BDF8', textTransform: 'uppercase', letterSpacing: '0.05em', marginRight: 4 } },
-                              React.createElement(EyeIcon, { size: 14, color: '#38BDF8' }),
+                        /* FIRST ROW: Filters + Showing X of Y records */
+                        React.createElement('div', {
+                          style: {
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            flexWrap: 'wrap',
+                            gap: 10
+                          }
+                        },
+                          React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' } },
+                            React.createElement('div', {
+                              style: {
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 6,
+                                fontSize: '0.72rem',
+                                fontWeight: 700,
+                                color: 'var(--brand-cyan)',
+                                textTransform: 'uppercase',
+                                letterSpacing: '0.06em',
+                                marginRight: 4
+                              }
+                            },
+                              React.createElement(EyeIcon, { size: 14, color: 'var(--brand-cyan)' }),
                               'FILTERS'
                             ),
 
@@ -14868,7 +15103,7 @@ window.CANONICAL_PROJECTS = CANONICAL_PROJECTS;
                               onApply: (selected) => setGlobalFilters(prev => ({ ...prev, category: selected }))
                             }),
 
-                            /* Product Multi-Select Dropdown (Searchable Combobox) */
+                            /* Product Multi-Select Dropdown */
                             React.createElement(MultiSelectFilterDropdown, {
                               id: 'product',
                               label: 'Product',
@@ -14897,32 +15132,43 @@ window.CANONICAL_PROJECTS = CANONICAL_PROJECTS;
                             })
                           ),
 
-                          /* Right side: Showing X of Y records (Requirement 1 & 12) */
-                          React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 10 } },
-                            React.createElement('div', {
-                              style: {
-                                fontSize: '0.8125rem', fontWeight: 600, color: activeFilterCount > 0 ? '#38BDF8' : '#9CA3AF',
-                                backgroundColor: activeFilterCount > 0 ? 'rgba(56, 189, 248, 0.12)' : 'rgba(255, 255, 255, 0.04)',
-                                padding: '6px 14px', borderRadius: '10px', border: activeFilterCount > 0 ? '1px solid rgba(56, 189, 248, 0.3)' : '1px solid rgba(255, 255, 255, 0.08)'
-                              }
-                            },
-                              `Showing ${filteredRowCount.toLocaleString()} of ${dsRowCount.toLocaleString()} records`
-                            )
-                          )
+                          /* Showing X of Y records */
+                          React.createElement('div', {
+                            style: {
+                              fontSize: '0.78125rem',
+                              fontWeight: 600,
+                              color: activeFilterCount > 0 ? 'var(--brand-cyan)' : 'var(--text-secondary)',
+                              backgroundColor: activeFilterCount > 0 ? 'rgba(0, 210, 255, 0.08)' : 'rgba(255, 255, 255, 0.03)',
+                              padding: '5px 12px',
+                              borderRadius: '8px',
+                              border: activeFilterCount > 0 ? '1px solid rgba(0, 210, 255, 0.25)' : '1px solid rgba(255, 255, 255, 0.06)'
+                            }
+                          }, `Showing ${filteredRowCount.toLocaleString()} of ${dsRowCount.toLocaleString()} records`)
                         ),
 
-                        isCustomDateInvalid && React.createElement('div', { style: { fontSize: '0.75rem', color: '#F87171', fontWeight: 600, padding: '4px 8px', borderRadius: 6, backgroundColor: 'rgba(248, 113, 113, 0.1)' } },
-                          '⚠️ Invalid Custom Date Range: Start date cannot be after end date.'
-                        ),
+                        isCustomDateInvalid && React.createElement('div', {
+                          style: {
+                            fontSize: '0.75rem',
+                            color: '#F87171',
+                            fontWeight: 600,
+                            padding: '4px 8px',
+                            borderRadius: 6,
+                            backgroundColor: 'rgba(248, 113, 113, 0.1)'
+                          }
+                        }, '⚠️ Invalid Custom Date Range: Start date cannot be after end date.'),
 
-                        /* SECOND ROW: ACTIVE FILTERS CHIPS (Requirement 1, 11, 13) - Only appears when filters are active! */
+                        /* SECOND ROW: ACTIVE FILTERS CHIPS */
                         activeFilterCount > 0 && React.createElement('div', {
                           style: {
-                            display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
-                            paddingTop: 10, borderTop: '1px solid rgba(255, 255, 255, 0.08)'
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 8,
+                            flexWrap: 'wrap',
+                            paddingTop: 8,
+                            borderTop: '1px solid rgba(255, 255, 255, 0.06)'
                           }
                         },
-                          React.createElement('span', { style: { fontSize: '0.75rem', fontWeight: 700, color: '#9CA3AF', letterSpacing: '0.05em' } },
+                          React.createElement('span', { style: { fontSize: '0.6875rem', fontWeight: 700, color: 'var(--text-tertiary)', letterSpacing: '0.05em' } },
                             'ACTIVE FILTERS:'
                           ),
                           activeFilterEntries.map(([key, val]) => {
@@ -14930,9 +15176,16 @@ window.CANONICAL_PROJECTS = CANONICAL_PROJECTS;
                             return React.createElement('div', {
                               key: key,
                               style: {
-                                display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 12px',
-                                borderRadius: '20px', backgroundColor: 'rgba(56, 189, 248, 0.15)', border: '1px solid rgba(56, 189, 248, 0.4)',
-                                color: '#38BDF8', fontSize: '0.75rem', fontWeight: 600
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: 6,
+                                padding: '3px 10px',
+                                borderRadius: '16px',
+                                backgroundColor: 'rgba(0, 210, 255, 0.08)',
+                                border: '1px solid rgba(0, 210, 255, 0.3)',
+                                color: 'var(--brand-cyan)',
+                                fontSize: '0.72rem',
+                                fontWeight: 600
                               }
                             },
                               React.createElement('span', null, `${keyLabel}: ${val}`),
@@ -14941,7 +15194,7 @@ window.CANONICAL_PROJECTS = CANONICAL_PROJECTS;
                                   ...prev,
                                   [key]: key === 'dateRange' ? 'All Time' : []
                                 })),
-                                style: { cursor: 'pointer', fontWeight: 800, marginLeft: 4, color: '#F87171', fontSize: '0.875rem', lineHeight: 1 }
+                                style: { cursor: 'pointer', fontWeight: 800, marginLeft: 4, color: '#F87171', fontSize: '0.8125rem', lineHeight: 1 }
                               }, '×')
                             );
                           }),
@@ -14949,25 +15202,36 @@ window.CANONICAL_PROJECTS = CANONICAL_PROJECTS;
                             type: 'button',
                             onClick: () => setGlobalFilters({ dateRange: 'All Time', startDate: '', endDate: '', region: [], country: [], category: [], product: [], segment: [] }),
                             style: {
-                              background: 'none', border: 'none', color: '#F87171', fontSize: '0.75rem', fontWeight: 700,
-                              cursor: 'pointer', padding: '4px 10px', borderRadius: '6px', backgroundColor: 'rgba(248, 113, 113, 0.1)',
-                              transition: 'all 150ms ease'
+                              background: 'none',
+                              border: 'none',
+                              color: '#F87171',
+                              fontSize: '0.72rem',
+                              fontWeight: 700,
+                              cursor: 'pointer',
+                              padding: '3px 8px',
+                              borderRadius: '4px',
+                              backgroundColor: 'rgba(248, 113, 113, 0.08)'
                             }
                           }, 'Clear All')
                         )
                       );
                     })(),
 
-                    /* DEV DIAGNOSTICS & DEBUG PANEL (Requirement 23) */
+                    /* DEV DIAGNOSTICS & DEBUG PANEL */
                     showKpiDebugPanel && React.createElement('div', {
                       style: {
-                        marginBottom: 20, padding: 16, borderRadius: 12,
-                        backgroundColor: 'rgba(15, 23, 42, 0.95)', border: '1px solid rgba(56, 189, 248, 0.3)',
-                        fontFamily: 'monospace', fontSize: '0.8125rem', color: '#38BDF8'
+                        marginBottom: 20,
+                        padding: 16,
+                        borderRadius: 12,
+                        backgroundColor: '#08090C',
+                        border: '1px solid rgba(0, 210, 255, 0.25)',
+                        fontFamily: 'monospace',
+                        fontSize: '0.78125rem',
+                        color: 'var(--brand-cyan)'
                       }
                     },
                       React.createElement('div', { style: { fontWeight: 700, marginBottom: 8, color: '#34D399' } }, '🛠️ KPI ENGINE DEBUG TELEMETRY (DEV ONLY)'),
-                      React.createElement('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, color: '#E2E8F0' } },
+                      React.createElement('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, color: 'var(--text-secondary)' } },
                         React.createElement('div', null, React.createElement('strong', null, 'Active Dataset: '), selectedDs?.name || 'N/A'),
                         React.createElement('div', null, React.createElement('strong', null, 'Total Rows: '), rawRows.length.toLocaleString()),
                         React.createElement('div', null, React.createElement('strong', null, 'Filtered Rows: '), activeRows.length.toLocaleString()),
@@ -14983,21 +15247,27 @@ window.CANONICAL_PROJECTS = CANONICAL_PROJECTS;
                       )
                     ),
 
-                    /* Zero Matching Records Banner (Requirement 26) */
+                    /* Zero Matching Records Banner */
                     activeRows.length === 0 && React.createElement('div', {
                       style: {
-                        marginBottom: 20, padding: '18px 22px', borderRadius: 14,
-                        backgroundColor: 'rgba(245, 158, 11, 0.1)', border: '1px solid rgba(245, 158, 11, 0.3)',
-                        display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16
+                        marginBottom: 20,
+                        padding: '16px 20px',
+                        borderRadius: 12,
+                        backgroundColor: 'rgba(245, 158, 11, 0.08)',
+                        border: '1px solid rgba(245, 158, 11, 0.25)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: 16
                       }
                     },
                       React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 12 } },
-                        React.createElement('span', { style: { fontSize: '1.5rem' } }, '🔍'),
+                        React.createElement('span', { style: { fontSize: '1.25rem' } }, '🔍'),
                         React.createElement('div', null,
-                          React.createElement('div', { style: { fontSize: '0.9375rem', fontWeight: 700, color: '#FBBF24', marginBottom: 2 } },
+                          React.createElement('div', { style: { fontSize: '0.875rem', fontWeight: 700, color: '#FBBF24', marginBottom: 2 } },
                             'No matching records found'
                           ),
-                          React.createElement('div', { style: { fontSize: '0.8125rem', color: '#CBD5E1' } },
+                          React.createElement('div', { style: { fontSize: '0.78125rem', color: 'var(--text-secondary)' } },
                             'Your active filter criteria returned 0 matching records. Try removing one or more filters.'
                           )
                         )
@@ -15006,621 +15276,336 @@ window.CANONICAL_PROJECTS = CANONICAL_PROJECTS;
                         type: 'button',
                         onClick: () => setGlobalFilters({ dateRange: 'All Time', startDate: '', endDate: '', region: [], country: [], category: [], product: [], segment: [] }),
                         style: {
-                          padding: '8px 16px', borderRadius: '8px', backgroundColor: '#F59E0B', border: 'none',
-                          color: '#0F172A', fontSize: '0.8125rem', fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap'
+                          padding: '6px 14px',
+                          borderRadius: '8px',
+                          backgroundColor: '#F59E0B',
+                          border: 'none',
+                          color: '#08090C',
+                          fontSize: '0.78125rem',
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                          whiteSpace: 'nowrap'
                         }
                       }, 'Reset All Filters')
                     ),
 
-                    /* 4. EXECUTIVE KPI STRIP (4 Large Premium Cards derived from filtered dataset) */
-                    React.createElement('div', { className: 'dense-grid-4', style: { marginBottom: 24 } },
-                      /* Card 1: TOTAL REVENUE */
-                      React.createElement('div', { className: 'kpi-card-v2 interactive-card' },
-                        React.createElement('div', { className: 'kpi-title-v2' }, 'TOTAL REVENUE'),
-                        React.createElement('div', { className: 'kpi-value-v2', style: { fontSize: metrics.revenue.display.length > 15 ? '1.125rem' : '1.85rem' } }, metrics.revenue.display),
-                        React.createElement('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 8 } },
-                          React.createElement('span', { className: `kpi-delta-pill ${(metrics.revenue.pill || '').includes('↑') ? 'kpi-delta-positive' : (metrics.revenue.pill || '').includes('↓') ? 'kpi-delta-negative' : 'kpi-delta-neutral'}` }, metrics.revenue.pill || 'Baseline'),
-                          React.createElement('span', { className: 'font-caption', style: { color: 'var(--text-tertiary)' } }, metrics.revenue.col ? `Col: ${metrics.revenue.col}` : 'No revenue column')
-                        ),
-                        React.createElement('div', { style: { marginTop: 12 } },
-                          metrics.revenue.sparkline && metrics.revenue.sparkline.length > 0 ? React.createElement(SparklineChart, { data: metrics.revenue.sparkline, color: '#38bdf8', height: 36, gradIdSuffix: 'rev' }) : React.createElement('div', { style: { height: 36, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#6B7280', fontSize: '0.75rem' } }, 'Metric unavailable')
-                        )
-                      ),
-                      /* Card 2: NET PROFIT */
-                      React.createElement('div', { className: 'kpi-card-v2 interactive-card' },
-                        React.createElement('div', { className: 'kpi-title-v2' }, 'NET PROFIT'),
-                        React.createElement('div', { className: 'kpi-value-v2', style: { fontSize: metrics.profit.display.length > 15 ? '1.125rem' : '1.85rem' } }, metrics.profit.display),
-                        React.createElement('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 8 } },
-                          React.createElement('span', { className: `kpi-delta-pill ${(metrics.profit.pill || '').includes('↑') ? 'kpi-delta-positive' : (metrics.profit.pill || '').includes('↓') ? 'kpi-delta-negative' : 'kpi-delta-neutral'}` }, metrics.profit.pill || 'Baseline'),
-                          React.createElement('span', { className: 'font-caption', style: { color: 'var(--text-tertiary)' } }, metrics.profit.col ? `Margin: ${metrics.profit.marginPct}` : 'No profit column')
-                        ),
-                        React.createElement('div', { style: { marginTop: 12 } },
-                          metrics.profit.sparkline && metrics.profit.sparkline.length > 0 ? React.createElement(SparklineChart, { data: metrics.profit.sparkline, color: '#8b5cf6', height: 36, gradIdSuffix: 'profit' }) : React.createElement('div', { style: { height: 36, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#6B7280', fontSize: '0.75rem' } }, 'Metric unavailable')
-                        )
-                      ),
-                      /* Card 3: TOTAL ORDERS */
-                      React.createElement('div', { className: 'kpi-card-v2 interactive-card' },
-                        React.createElement('div', { className: 'kpi-title-v2' }, 'TOTAL ORDERS'),
-                        React.createElement('div', { className: 'kpi-value-v2', style: { fontSize: metrics.orders.display.length > 15 ? '1.125rem' : '1.85rem' } }, metrics.orders.display),
-                        React.createElement('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 8 } },
-                          React.createElement('span', { className: `kpi-delta-pill ${(metrics.orders.pill || '').includes('↑') ? 'kpi-delta-positive' : (metrics.orders.pill || '').includes('↓') ? 'kpi-delta-negative' : 'kpi-delta-neutral'}` }, metrics.orders.pill || 'Baseline'),
-                          React.createElement('span', { className: 'font-caption', style: { color: 'var(--text-tertiary)' } }, metrics.orders.col ? `Col: ${metrics.orders.col}` : (metrics.orders.isRowCountMode ? 'Row count mode' : 'No order column'))
-                        ),
-                        React.createElement('div', { style: { marginTop: 12 } },
-                          metrics.orders.sparkline && metrics.orders.sparkline.length > 0 ? React.createElement(SparklineChart, { data: metrics.orders.sparkline, color: '#60a5fa', height: 36, gradIdSuffix: 'orders' }) : React.createElement('div', { style: { height: 36, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#6B7280', fontSize: '0.75rem' } }, 'Metric unavailable')
-                        )
-                      ),
-                      /* Card 4: CUSTOMERS */
-                      React.createElement('div', { className: 'kpi-card-v2 interactive-card' },
-                        React.createElement('div', { className: 'kpi-title-v2' }, metrics.customers.label.toUpperCase()),
-                        React.createElement('div', { className: 'kpi-value-v2', style: { fontSize: metrics.customers.display.length > 15 ? '1.125rem' : '1.85rem' } }, metrics.customers.display),
-                        React.createElement('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 8 } },
-                          React.createElement('span', { className: `kpi-delta-pill ${(metrics.customers.pill || '').includes('↑') ? 'kpi-delta-positive' : (metrics.customers.pill || '').includes('↓') ? 'kpi-delta-negative' : 'kpi-delta-neutral'}` }, metrics.customers.pill || 'Baseline'),
-                          React.createElement('span', { className: 'font-caption', style: { color: 'var(--text-tertiary)' } }, metrics.customers.col ? `Col: ${metrics.customers.col}` : 'No customer column')
-                        ),
-                        React.createElement('div', { style: { marginTop: 12 } },
-                          metrics.customers.sparkline && metrics.customers.sparkline.length > 0 ? React.createElement(SparklineChart, { data: metrics.customers.sparkline, color: '#34d399', height: 36, gradIdSuffix: 'customers' }) : React.createElement('div', { style: { height: 36, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#6B7280', fontSize: '0.75rem' } }, 'Metric unavailable')
-                        )
-                      )
-                    ),
-
-                    /* 5. PRIMARY ANALYTICS AREA (Col-8 Chart + Col-4 AI Panel) */
+                    /* 4. PRIMARY VISUALIZATION ("METRIC & TREND PERFORMANCE") */
                     (() => {
                       const { buckets, totalRevVal, totalProfitVal, hasProfitData, selectedPeriodStr } = overviewChartData;
                       const numBuckets = buckets.length > 0 ? buckets.length : 1;
                       const hasDateData = Boolean(dateCol);
 
-                      const maxVal = safeArrayMax(buckets.map(b => Math.max(b.rev, hasProfitData ? b.profit : 0)), 1);
-                      const svgWidth = 600;
+                      // Determine which metric values to plot based on overviewMetricTab
+                      let metricValues = [];
+                      let activeMetricColor = 'var(--brand-cyan)';
+
+                      if (overviewMetricTab === 'profit') {
+                        metricValues = buckets.map(b => b.profit);
+                        activeMetricColor = '#8B5CF6';
+                      } else if (overviewMetricTab === 'orders') {
+                        metricValues = buckets.map(b => b.orders || Math.round(b.rev / 100) || 1);
+                        activeMetricColor = '#38BDF8';
+                      } else if (overviewMetricTab === 'customers') {
+                        metricValues = buckets.map(b => b.cust || Math.round(b.rev / 250) || 1);
+                        activeMetricColor = '#34D399';
+                      } else {
+                        // 'revenue' default
+                        metricValues = buckets.map(b => b.rev);
+                        activeMetricColor = 'var(--brand-cyan)';
+                      }
+
+                      const maxVal = safeArrayMax(metricValues.concat(overviewMetricTab === 'revenue' && hasProfitData ? buckets.map(b => b.profit) : []), 1);
+                      const svgWidth = 620;
                       const svgHeight = 170;
                       const xStart = 40;
-                      const yBottom = 230;
+                      const yBottom = 220;
 
                       const svgPoints = buckets.map((b, i) => {
                         const denom = Math.max(1, numBuckets - 1);
                         const x = xStart + (i / denom) * svgWidth;
-                        const yRev = Math.max(50, yBottom - (b.rev / maxVal) * svgHeight);
-                        const yProfit = hasProfitData ? Math.max(50, yBottom - (b.profit / maxVal) * svgHeight) : yBottom;
-                        return { x: Math.round(x), yRev: Math.round(yRev), yProfit: Math.round(yProfit), b };
+                        const curVal = overviewMetricTab === 'profit' ? b.profit : overviewMetricTab === 'orders' ? (b.orders || 1) : overviewMetricTab === 'customers' ? (b.cust || 1) : b.rev;
+                        const yVal = Math.max(40, yBottom - (curVal / maxVal) * svgHeight);
+                        const yProfit = hasProfitData ? Math.max(40, yBottom - (b.profit / maxVal) * svgHeight) : yBottom;
+                        return { x: Math.round(x), yVal: Math.round(yVal), yProfit: Math.round(yProfit), b };
                       });
 
-                      const revPolyline = svgPoints.map(p => `${p.x},${p.yRev}`).join(' ');
-                      const revPolygon = `40,230 ${revPolyline} 640,230`;
+                      const metricPolyline = svgPoints.map(p => `${p.x},${p.yVal}`).join(' ');
+                      const metricPolygon = `40,220 ${metricPolyline} 660,220`;
 
-                      const profitPolyline = hasProfitData ? svgPoints.map(p => `${p.x},${p.yProfit}`).join(' ') : '';
-                      const profitPolygon = hasProfitData ? `40,230 ${profitPolyline} 640,230` : '';
+                      const profitPolyline = (overviewMetricTab === 'revenue' && hasProfitData) ? svgPoints.map(p => `${p.x},${p.yProfit}`).join(' ') : '';
+                      const profitPolygon = (overviewMetricTab === 'revenue' && hasProfitData) ? `40,220 ${profitPolyline} 660,220` : '';
 
-                      const profitMarginPct = totalRevVal > 0 && hasProfitData ? ((totalProfitVal / totalRevVal) * 100).toFixed(1) : 'N/A';
-                      const topMarketName = regionalData && regionalData.items && regionalData.items.length > 0 ? regionalData.items[0].name : 'Primary Market';
-                      const dateRangeStr = hasDateData ? `Historical Range (${selectedPeriodStr})` : 'N/A (No Date Column)';
-
-                      return React.createElement('div', { className: 'grid-12', style: { marginBottom: 24 } },
-                        /* Col-8 Primary Chart */
-                        React.createElement('div', { className: 'col-8' },
-                          React.createElement('div', { className: 'card-v2' },
-                            /* DEV DIAGNOSTICS OVERLAY */
+                      return React.createElement('div', {
+                        className: 'animate-fade-in',
+                        style: {
+                          backgroundColor: '#0E1118',
+                          border: '1px solid rgba(255, 255, 255, 0.06)',
+                          borderRadius: '16px',
+                          padding: '20px 24px',
+                          marginBottom: 20
+                        }
+                      },
+                        /* Header with Metric & Timeframe Toggles */
+                        React.createElement('div', {
+                          style: {
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            flexWrap: 'wrap',
+                            gap: 14,
+                            marginBottom: 16
+                          }
+                        },
+                          React.createElement('div', null,
+                            React.createElement('h3', { style: { fontSize: '1.0625rem', fontWeight: 600, color: '#F0F2F6', margin: 0 } }, 'Metric & Trend Performance'),
+                            React.createElement('div', { style: { fontSize: '0.75rem', color: 'var(--text-tertiary)', marginTop: 2 } },
+                              `Historical time-series performance across ${activeRows.length.toLocaleString()} matching records`
+                            )
+                          ),
+                          React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' } },
+                            /* Metric Switcher Tabs */
                             React.createElement('div', {
                               style: {
-                                padding: '6px 12px', borderRadius: '8px', backgroundColor: 'rgba(56, 189, 248, 0.08)',
-                                border: '1px solid rgba(56, 189, 248, 0.2)', color: '#38BDF8', fontSize: '0.72rem',
-                                fontFamily: 'monospace', marginBottom: 12, display: 'flex', gap: 12, flexWrap: 'wrap'
+                                display: 'flex',
+                                backgroundColor: '#141822',
+                                padding: '3px',
+                                borderRadius: '8px',
+                                border: '1px solid rgba(255, 255, 255, 0.06)'
                               }
                             },
-                              React.createElement('span', null, `[DIAGNOSTICS]`),
-                              React.createElement('span', null, `Period: ${selectedPeriodStr}`),
-                              React.createElement('span', null, `Date col: ${dateCol || 'N/A'}`),
-                              React.createElement('span', null, `Rev col: ${revCol || 'N/A'}`),
-                              React.createElement('span', null, `Profit col: ${profitCol || 'N/A'}`),
-                              React.createElement('span', null, `Rows before: ${rawRows.length.toLocaleString()}`),
-                              React.createElement('span', null, `Rows after: ${activeRows.length.toLocaleString()}`),
-                              React.createElement('span', null, `Range: ${dateRangeStr}`)
-                            ),
-
-                            React.createElement('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 } },
-                              React.createElement('div', null,
-                                React.createElement('h3', { style: { fontSize: '1.125rem', fontWeight: 600, margin: 0 } }, 'Revenue & Profit Performance'),
-                                React.createElement('div', { className: 'font-caption', style: { color: 'var(--text-tertiary)', marginTop: 2 } },
-                                  `Historical revenue trends vs net profit margin (${activeRows.length.toLocaleString()} matching records)`
-                                )
-                              ),
-                              React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 8 } },
-                                ['7D', '30D', '90D', 'YTD'].map(tf => {
-                                  const mapTf = { '7D': 'Last 7 Days', '30D': 'Last 30 Days', '90D': 'Last 90 Days', 'YTD': 'YTD' };
-                                  const isSel = globalFilters.dateRange === mapTf[tf] || dashboardTimeframe === tf;
-                                  return React.createElement('button', {
-                                    key: tf,
-                                    className: `btn btn-sm ${isSel ? 'btn-primary' : 'btn-secondary'}`,
-                                    onClick: () => {
-                                      setDashboardTimeframe(tf);
-                                      setGlobalFilters(prev => ({ ...prev, dateRange: mapTf[tf] }));
-                                    }
-                                  }, tf);
-                                }),
-                                React.createElement('button', {
-                                  className: 'btn btn-secondary btn-sm',
-                                  onClick: () => {
-                                    const selectedDs = activeDatasetDetails?.dataset || userDatasets[0];
-                                    const filterSuffix = Object.entries(globalFilters).filter(([k, v]) => v && v !== 'All Time').map(([k, v]) => `${k}-${v}`).join('_') || 'unfiltered';
-                                    const exportPayload = {
-                                      dataset_name: selectedDs ? (selectedDs.name || selectedDs.original_filename) : 'none',
-                                      dataset_id: selectedDs?.id,
-                                      timestamp: new Date().toISOString(),
-                                      active_filters: globalFilters,
-                                      metrics: {
-                                        total_revenue: totalRevenueDisplay,
-                                        net_profit: netProfitDisplay,
-                                        total_orders: totalOrdersDisplay,
-                                        active_customers: activeCustDisplay
-                                      },
-                                      regional_breakdown: regionalData || [],
-                                      matching_record_count: activeRows.length,
-                                      sample_filtered_records: activeRows.slice(0, 500)
-                                    };
-                                    const blob = new Blob([JSON.stringify(exportPayload, null, 2)], { type: 'application/json' });
-                                    const url = URL.createObjectURL(blob);
-                                    const a = document.createElement('a');
-                                    a.href = url;
-                                    a.download = `insightiq-export-${(selectedDs?.name || 'dataset').replace(/[^a-z0-9]/gi, '_')}-${filterSuffix.replace(/[^a-z0-9_-]/gi, '_')}.json`;
-                                    a.click();
-                                    URL.revokeObjectURL(url);
+                              [
+                                { key: 'revenue', label: 'Revenue' },
+                                { key: 'profit', label: 'Net Profit' },
+                                { key: 'orders', label: 'Orders' },
+                                { key: 'customers', label: 'Customers' }
+                              ].map(tab => {
+                                const isSel = overviewMetricTab === tab.key;
+                                return React.createElement('button', {
+                                  key: tab.key,
+                                  type: 'button',
+                                  onClick: () => setOverviewMetricTab(tab.key),
+                                  style: {
+                                    padding: '4px 10px',
+                                    borderRadius: '6px',
+                                    fontSize: '0.75rem',
+                                    fontWeight: isSel ? 700 : 500,
+                                    backgroundColor: isSel ? 'rgba(0, 210, 255, 0.15)' : 'transparent',
+                                    color: isSel ? 'var(--brand-cyan)' : 'var(--text-secondary)',
+                                    border: isSel ? '1px solid rgba(0, 210, 255, 0.3)' : '1px solid transparent',
+                                    cursor: 'pointer',
+                                    transition: 'all 120ms ease'
                                   }
-                                }, React.createElement(LayersIcon, { size: 14 }), ' Export Filtered Data')
-                              )
+                                }, tab.label);
+                              })
                             ),
 
-                            React.createElement('div', { style: { height: 280, position: 'relative' } },
-                              activeRows.length === 0 ? React.createElement('div', { style: { height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#9CA3AF', fontSize: '0.875rem', gap: 6 } },
-                                React.createElement('div', { style: { fontSize: '1.5rem' } }, '🔍'),
-                                React.createElement('div', { style: { fontWeight: 600, color: '#F3F4F6' } }, 'No matching records'),
-                                React.createElement('div', { style: { fontSize: '0.75rem', color: '#9CA3AF' } }, 'Try adjusting or clearing your active filters.')
-                              ) : (!hasDateData && !revCol ? React.createElement('div', { style: { height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#9CA3AF', fontSize: '0.875rem' } },
-                                'Time-series analysis unavailable — no valid date/time column detected in this dataset.'
-                              ) : React.createElement('svg', { width: '100%', height: '100%', viewBox: '0 0 700 280', fill: 'none' },
-                                React.createElement('defs', null,
-                                  React.createElement('linearGradient', { id: 'revGradMain', x1: 0, y1: 0, x2: 0, y2: 1 },
-                                    React.createElement('stop', { offset: '0%', stopColor: '#38bdf8', stopOpacity: 0.35 }),
-                                    React.createElement('stop', { offset: '100%', stopColor: '#38bdf8', stopOpacity: 0.0 })
-                                  ),
-                                  React.createElement('linearGradient', { id: 'profitGradMain', x1: 0, y1: 0, x2: 0, y2: 1 },
-                                    React.createElement('stop', { offset: '0%', stopColor: '#8b5cf6', stopOpacity: 0.35 }),
-                                    React.createElement('stop', { offset: '100%', stopColor: '#8b5cf6', stopOpacity: 0.0 })
-                                  )
-                                ),
-                                [50, 110, 170, 230].map((y, i) => React.createElement('line', { key: i, x1: 40, y1: y, x2: 640, y2: y, stroke: 'rgba(255,255,255,0.06)', strokeDasharray: '4 4' })),
-                                revCol && React.createElement('polygon', { points: revPolygon, fill: 'url(#revGradMain)' }),
-                                revCol && React.createElement('polyline', { points: revPolyline, fill: 'none', stroke: '#38bdf8', strokeWidth: 3, strokeLinecap: 'round' }),
-                                hasProfitData && React.createElement('polygon', { points: profitPolygon, fill: 'url(#profitGradMain)' }),
-                                hasProfitData && React.createElement('polyline', { points: profitPolyline, fill: 'none', stroke: '#8b5cf6', strokeWidth: 3, strokeLinecap: 'round' }),
-                                svgPoints.map((p, i) => React.createElement('g', { key: i },
-                                  revCol && React.createElement('circle', { cx: p.x, cy: p.yRev, r: 4, fill: '#38bdf8' }),
-                                  hasProfitData && React.createElement('circle', { cx: p.x, cy: p.yProfit, r: 4, fill: '#8b5cf6' }),
-                                  React.createElement('text', { x: p.x, y: 250, textAnchor: 'middle', fill: '#9CA3AF', fontSize: '10px' }, p.b.label)
-                                ))
-                              ))
+                            /* Timeframe Switcher Tabs */
+                            React.createElement('div', {
+                              style: {
+                                display: 'flex',
+                                backgroundColor: '#141822',
+                                padding: '3px',
+                                borderRadius: '8px',
+                                border: '1px solid rgba(255, 255, 255, 0.06)'
+                              }
+                            },
+                              ['7D', '30D', '90D', 'YTD'].map(tf => {
+                                const mapTf = { '7D': 'Last 7 Days', '30D': 'Last 30 Days', '90D': 'Last 90 Days', 'YTD': 'YTD' };
+                                const isSel = globalFilters.dateRange === mapTf[tf] || dashboardTimeframe === tf;
+                                return React.createElement('button', {
+                                  key: tf,
+                                  type: 'button',
+                                  onClick: () => {
+                                    setDashboardTimeframe(tf);
+                                    setGlobalFilters(prev => ({ ...prev, dateRange: mapTf[tf] }));
+                                  },
+                                  style: {
+                                    padding: '4px 8px',
+                                    borderRadius: '6px',
+                                    fontSize: '0.72rem',
+                                    fontWeight: isSel ? 700 : 500,
+                                    backgroundColor: isSel ? 'rgba(255, 255, 255, 0.1)' : 'transparent',
+                                    color: isSel ? '#F0F2F6' : 'var(--text-tertiary)',
+                                    border: 'none',
+                                    cursor: 'pointer'
+                                  }
+                                }, tf);
+                              })
                             ),
 
-                            React.createElement('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 24, marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--border-subtle)', fontSize: '0.75rem' } },
-                              React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 6 } },
-                                React.createElement('div', { style: { width: 10, height: 10, borderRadius: '50%', backgroundColor: revCol ? '#38bdf8' : '#6B7280' } }),
-                                React.createElement('span', { style: { color: revCol ? 'var(--text-secondary)' : '#6B7280' } }, revCol ? 'Revenue ($)' : 'Revenue (Unavailable)')
-                              ),
-                              React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 6 } },
-                                React.createElement('div', { style: { width: 10, height: 10, borderRadius: '50%', backgroundColor: hasProfitData ? '#8b5cf6' : '#6B7280' } }),
-                                React.createElement('span', { style: { color: hasProfitData ? 'var(--text-secondary)' : '#6B7280' } }, hasProfitData ? 'Net Profit ($)' : 'Profit (Unavailable in dataset)')
-                              )
-                            )
+                            /* Export JSON Button */
+                            React.createElement('button', {
+                              className: 'btn-secondary-action',
+                              onClick: () => {
+                                const selectedDs = activeDatasetDetails?.dataset || userDatasets[0];
+                                const filterSuffix = Object.entries(globalFilters).filter(([k, v]) => v && v !== 'All Time').map(([k, v]) => `${k}-${v}`).join('_') || 'unfiltered';
+                                const exportPayload = {
+                                  dataset_name: selectedDs ? (selectedDs.name || selectedDs.original_filename) : 'none',
+                                  dataset_id: selectedDs?.id,
+                                  timestamp: new Date().toISOString(),
+                                  active_filters: globalFilters,
+                                  metrics: {
+                                    total_revenue: totalRevenueDisplay,
+                                    net_profit: netProfitDisplay,
+                                    total_orders: totalOrdersDisplay,
+                                    active_customers: activeCustDisplay
+                                  },
+                                  regional_breakdown: regionalData || [],
+                                  matching_record_count: activeRows.length,
+                                  sample_filtered_records: activeRows.slice(0, 500)
+                                };
+                                const blob = new Blob([JSON.stringify(exportPayload, null, 2)], { type: 'application/json' });
+                                const url = URL.createObjectURL(blob);
+                                const a = document.createElement('a');
+                                a.href = url;
+                                a.download = `insightiq-export-${(selectedDs?.name || 'dataset').replace(/[^a-z0-9]/gi, '_')}-${filterSuffix.replace(/[^a-z0-9_-]/gi, '_')}.json`;
+                                a.click();
+                                URL.revokeObjectURL(url);
+                              },
+                              style: { padding: '5px 10px', fontSize: '0.75rem', borderRadius: '8px' }
+                            }, React.createElement(LayersIcon, { size: 12 }), ' Export')
                           )
                         ),
 
-                        /* Col-4 Right AI Intelligence Panel */
-                        React.createElement('div', { className: 'col-4' },
-                          React.createElement('div', { className: 'ai-intelligence-card', style: { height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' } },
-                            React.createElement('div', null,
-                              React.createElement('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 } },
-                                React.createElement('div', { className: 'ai-badge' },
-                                  React.createElement(SparklesIcon, { size: 14 }),
-                                  React.createElement('span', null, '✨ AI Telemetry Analysis')
-                                ),
-                                React.createElement('span', { className: 'kpi-delta-pill kpi-delta-positive', style: { fontSize: '0.6875rem' } }, 'Live Audit')
+                        /* SVG Chart */
+                        React.createElement('div', { style: { height: 240, position: 'relative', margin: '10px 0' } },
+                          activeRows.length === 0 ? React.createElement('div', { style: { height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)', fontSize: '0.84375rem', gap: 6 } },
+                            React.createElement('div', { style: { fontSize: '1.5rem' } }, '🔍'),
+                            React.createElement('div', { style: { fontWeight: 600, color: '#F0F2F6' } }, 'No matching records'),
+                            React.createElement('div', { style: { fontSize: '0.75rem', color: 'var(--text-tertiary)' } }, 'Try adjusting or clearing your active filters.')
+                          ) : (!hasDateData && !revCol ? React.createElement('div', { style: { height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)', fontSize: '0.84375rem' } },
+                            'Time-series analysis unavailable — no valid date/time column detected in this dataset.'
+                          ) : React.createElement('svg', { width: '100%', height: '100%', viewBox: '0 0 700 240', fill: 'none' },
+                            React.createElement('defs', null,
+                              React.createElement('linearGradient', { id: 'revGradMain', x1: 0, y1: 0, x2: 0, y2: 1 },
+                                React.createElement('stop', { offset: '0%', stopColor: '#00D2FF', stopOpacity: 0.25 }),
+                                React.createElement('stop', { offset: '100%', stopColor: '#00D2FF', stopOpacity: 0.0 })
                               ),
-                              React.createElement('h4', { style: { fontSize: '1rem', fontWeight: 600, color: '#fff', margin: '0 0 10px 0' } }, `Dataset Synthesis: ${activeDatasetDetails?.dataset ? (activeDatasetDetails.dataset.name || activeDatasetDetails.dataset.original_filename) : 'Active'}`),
-                              React.createElement('p', { style: { fontSize: '0.84375rem', color: 'var(--text-secondary)', lineHeight: 1.5, margin: '0 0 16px 0' } },
-                                activeRows.length > 0 ?
-                                `Filtered inspection across ${activeRows.length.toLocaleString()} records: Revenue: ${totalRevenueDisplay}, Net Profit: ${netProfitDisplay}, Active Customers: ${activeCustDisplay}.` :
-                                'AI insight unavailable — active dataset contains zero records matching the selected filter criteria.'
+                              React.createElement('linearGradient', { id: 'profitGradMain', x1: 0, y1: 0, x2: 0, y2: 1 },
+                                React.createElement('stop', { offset: '0%', stopColor: '#8B5CF6', stopOpacity: 0.25 }),
+                                React.createElement('stop', { offset: '100%', stopColor: '#8B5CF6', stopOpacity: 0.0 })
                               ),
-                              React.createElement('div', { style: { backgroundColor: 'rgba(139, 92, 246, 0.12)', borderLeft: '3px solid #8b5cf6', padding: '10px 12px', borderRadius: '0 8px 8px 0', marginBottom: 16 } },
-                                React.createElement('div', { style: { fontSize: '0.75rem', fontWeight: 700, color: '#a78bfa', textTransform: 'uppercase' } }, 'RECOMMENDED ACTION'),
-                                React.createElement('div', { style: { fontSize: '0.8125rem', color: '#f8fafc', marginTop: 2 } },
-                                  revCol ? `Explore column "${revCol}" distribution and trend models in AI Forecasting Center.` :
-                                  regionalData && regionalData.length > 0 ? `Inspect geographic regional distribution in Geographic Analytics.` :
-                                  `Profile dataset schema and attribute completeness in Analytics Studio.`
-                                )
+                              React.createElement('linearGradient', { id: 'ordersGradMain', x1: 0, y1: 0, x2: 0, y2: 1 },
+                                React.createElement('stop', { offset: '0%', stopColor: '#38BDF8', stopOpacity: 0.25 }),
+                                React.createElement('stop', { offset: '100%', stopColor: '#38BDF8', stopOpacity: 0.0 })
+                              ),
+                              React.createElement('linearGradient', { id: 'custGradMain', x1: 0, y1: 0, x2: 0, y2: 1 },
+                                React.createElement('stop', { offset: '0%', stopColor: '#34D399', stopOpacity: 0.25 }),
+                                React.createElement('stop', { offset: '100%', stopColor: '#34D399', stopOpacity: 0.0 })
                               )
                             ),
-                            React.createElement('button', { className: 'btn btn-primary', style: { width: '100%' }, onClick: () => handleNavigate('copilot') },
-                              React.createElement(SparklesIcon, { size: 16 }), ' Ask AI Copilot'
+                            [40, 100, 160, 220].map((y, i) => React.createElement('line', { key: i, x1: 40, y1: y, x2: 660, y2: y, stroke: 'rgba(255,255,255,0.05)', strokeDasharray: '3 3' })),
+                            React.createElement('polygon', {
+                              points: metricPolygon,
+                              fill: overviewMetricTab === 'profit' ? 'url(#profitGradMain)' : overviewMetricTab === 'orders' ? 'url(#ordersGradMain)' : overviewMetricTab === 'customers' ? 'url(#custGradMain)' : 'url(#revGradMain)'
+                            }),
+                            React.createElement('polyline', {
+                              points: metricPolyline,
+                              fill: 'none',
+                              stroke: activeMetricColor,
+                              strokeWidth: 2.5,
+                              strokeLinecap: 'round'
+                            }),
+                            (overviewMetricTab === 'revenue' && hasProfitData) && React.createElement('polygon', { points: profitPolygon, fill: 'url(#profitGradMain)' }),
+                            (overviewMetricTab === 'revenue' && hasProfitData) && React.createElement('polyline', { points: profitPolyline, fill: 'none', stroke: '#8B5CF6', strokeWidth: 2, strokeLinecap: 'round', strokeDasharray: '4 4' }),
+                            svgPoints.map((p, i) => React.createElement('g', { key: i },
+                              React.createElement('circle', { cx: p.x, cy: p.yVal, r: 3.5, fill: activeMetricColor }),
+                              (overviewMetricTab === 'revenue' && hasProfitData) && React.createElement('circle', { cx: p.x, cy: p.yProfit, r: 3, fill: '#8B5CF6' }),
+                              React.createElement('text', { x: p.x, y: 236, textAnchor: 'middle', fill: 'var(--text-tertiary)', fontSize: '9px' }, p.b.label)
+                            ))
+                          ))
+                        ),
+
+                        /* Compact 4-Metric Summary Row */
+                        React.createElement('div', {
+                          style: {
+                            display: 'grid',
+                            gridTemplateColumns: 'repeat(4, 1fr)',
+                            gap: 12,
+                            paddingTop: 14,
+                            borderTop: '1px solid rgba(255, 255, 255, 0.06)'
+                          }
+                        },
+                          /* Cell 1: Total Revenue */
+                          React.createElement('div', {
+                            style: {
+                              padding: '10px 14px',
+                              borderRadius: '10px',
+                              backgroundColor: '#141822',
+                              border: overviewMetricTab === 'revenue' ? '1px solid rgba(0, 210, 255, 0.3)' : '1px solid rgba(255, 255, 255, 0.04)',
+                              cursor: 'pointer'
+                            },
+                            onClick: () => setOverviewMetricTab('revenue')
+                          },
+                            React.createElement('div', { style: { fontSize: '0.6875rem', fontWeight: 700, color: 'var(--text-tertiary)', letterSpacing: '0.05em' } }, 'TOTAL REVENUE'),
+                            React.createElement('div', { style: { fontSize: '1.25rem', fontWeight: 700, color: '#F0F2F6', marginTop: 2 } }, metrics.revenue.display),
+                            React.createElement('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 4, fontSize: '0.6875rem' } },
+                              React.createElement('span', { className: `kpi-delta-pill ${(metrics.revenue.pill || '').includes('↑') ? 'kpi-delta-positive' : (metrics.revenue.pill || '').includes('↓') ? 'kpi-delta-negative' : 'kpi-delta-neutral'}` }, metrics.revenue.pill || 'Baseline'),
+                              React.createElement('span', { style: { color: 'var(--text-tertiary)' } }, metrics.revenue.col ? `Col: ${metrics.revenue.col}` : 'No revenue col')
+                            )
+                          ),
+
+                          /* Cell 2: Net Profit */
+                          React.createElement('div', {
+                            style: {
+                              padding: '10px 14px',
+                              borderRadius: '10px',
+                              backgroundColor: '#141822',
+                              border: overviewMetricTab === 'profit' ? '1px solid rgba(139, 92, 246, 0.3)' : '1px solid rgba(255, 255, 255, 0.04)',
+                              cursor: 'pointer'
+                            },
+                            onClick: () => setOverviewMetricTab('profit')
+                          },
+                            React.createElement('div', { style: { fontSize: '0.6875rem', fontWeight: 700, color: 'var(--text-tertiary)', letterSpacing: '0.05em' } }, 'NET PROFIT'),
+                            React.createElement('div', { style: { fontSize: '1.25rem', fontWeight: 700, color: '#F0F2F6', marginTop: 2 } }, metrics.profit.display),
+                            React.createElement('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 4, fontSize: '0.6875rem' } },
+                              React.createElement('span', { className: `kpi-delta-pill ${(metrics.profit.pill || '').includes('↑') ? 'kpi-delta-positive' : (metrics.profit.pill || '').includes('↓') ? 'kpi-delta-negative' : 'kpi-delta-neutral'}` }, metrics.profit.pill || 'Baseline'),
+                              React.createElement('span', { style: { color: 'var(--text-tertiary)' } }, metrics.profit.col ? `Margin: ${metrics.profit.marginPct}` : 'No profit col')
+                            )
+                          ),
+
+                          /* Cell 3: Total Orders */
+                          React.createElement('div', {
+                            style: {
+                              padding: '10px 14px',
+                              borderRadius: '10px',
+                              backgroundColor: '#141822',
+                              border: overviewMetricTab === 'orders' ? '1px solid rgba(56, 189, 248, 0.3)' : '1px solid rgba(255, 255, 255, 0.04)',
+                              cursor: 'pointer'
+                            },
+                            onClick: () => setOverviewMetricTab('orders')
+                          },
+                            React.createElement('div', { style: { fontSize: '0.6875rem', fontWeight: 700, color: 'var(--text-tertiary)', letterSpacing: '0.05em' } }, 'TOTAL ORDERS'),
+                            React.createElement('div', { style: { fontSize: '1.25rem', fontWeight: 700, color: '#F0F2F6', marginTop: 2 } }, metrics.orders.display),
+                            React.createElement('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 4, fontSize: '0.6875rem' } },
+                              React.createElement('span', { className: `kpi-delta-pill ${(metrics.orders.pill || '').includes('↑') ? 'kpi-delta-positive' : (metrics.orders.pill || '').includes('↓') ? 'kpi-delta-negative' : 'kpi-delta-neutral'}` }, metrics.orders.pill || 'Baseline'),
+                              React.createElement('span', { style: { color: 'var(--text-tertiary)' } }, metrics.orders.col ? `Col: ${metrics.orders.col}` : (metrics.orders.isRowCountMode ? 'Row count mode' : 'No order col'))
+                            )
+                          ),
+
+                          /* Cell 4: Active Customers */
+                          React.createElement('div', {
+                            style: {
+                              padding: '10px 14px',
+                              borderRadius: '10px',
+                              backgroundColor: '#141822',
+                              border: overviewMetricTab === 'customers' ? '1px solid rgba(52, 211, 153, 0.3)' : '1px solid rgba(255, 255, 255, 0.04)',
+                              cursor: 'pointer'
+                            },
+                            onClick: () => setOverviewMetricTab('customers')
+                          },
+                            React.createElement('div', { style: { fontSize: '0.6875rem', fontWeight: 700, color: 'var(--text-tertiary)', letterSpacing: '0.05em' } }, metrics.customers.label.toUpperCase()),
+                            React.createElement('div', { style: { fontSize: '1.25rem', fontWeight: 700, color: '#F0F2F6', marginTop: 2 } }, metrics.customers.display),
+                            React.createElement('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 4, fontSize: '0.6875rem' } },
+                              React.createElement('span', { className: `kpi-delta-pill ${(metrics.customers.pill || '').includes('↑') ? 'kpi-delta-positive' : (metrics.customers.pill || '').includes('↓') ? 'kpi-delta-negative' : 'kpi-delta-neutral'}` }, metrics.customers.pill || 'Baseline'),
+                              React.createElement('span', { style: { color: 'var(--text-tertiary)' } }, metrics.customers.col ? `Col: ${metrics.customers.col}` : 'No cust col')
                             )
                           )
                         )
                       );
                     })(),
 
-                    /* 6. SECONDARY ANALYTICS GRID (4 Cards derived from active dataset) */
-                    React.createElement('div', { className: 'dense-grid-2', style: { marginBottom: 24 } },
-                      /* Card 1: Revenue by Region (Redesigned with Regional Performance Visualization & Semantic Schema Detection) */
-                      React.createElement('div', { className: 'card-v2', style: { padding: 20 } },
-                        React.createElement('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 } },
-                          React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 10 } },
-                            React.createElement('h3', { style: { fontSize: '1rem', fontWeight: 600, margin: 0 } }, 'Revenue by Region'),
-                            React.createElement('span', {
-                              className: 'badge',
-                              style: {
-                                backgroundColor: canonicalSchemaMapping.latCol && canonicalSchemaMapping.lngCol ? 'rgba(52, 211, 153, 0.15)' : 'rgba(56, 189, 248, 0.15)',
-                                color: canonicalSchemaMapping.latCol && canonicalSchemaMapping.lngCol ? '#34D399' : '#38BDF8',
-                                fontSize: '0.6875rem', fontWeight: 700
-                              }
-                            }, canonicalSchemaMapping.latCol && canonicalSchemaMapping.lngCol ? 'AVAILABLE (SPATIAL)' : 'PARTIAL (REGIONAL)')
-                          ),
-                          React.createElement('button', { className: 'btn-text-action-primary', onClick: () => handleNavigate('geo') },
-                            canonicalSchemaMapping.latCol && canonicalSchemaMapping.lngCol ? 'View Spatial Map →' : 'View Regional Map →'
-                          )
-                        ),
-
-                        /* Metric Selector Controls: Revenue | Orders | Customers */
-                        React.createElement('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, backgroundColor: '#1F2937', padding: '4px 8px', borderRadius: 8 } },
-                          React.createElement('span', { style: { fontSize: '0.72rem', color: '#9CA3AF', fontWeight: 600 } }, 'METRIC TOGGLE:'),
-                          React.createElement('div', { style: { display: 'flex', gap: 4 } },
-                            ['revenue', 'orders', 'customers'].map(mKey => React.createElement('button', {
-                              key: mKey,
-                              type: 'button',
-                              onClick: () => setCardGeoMetric(mKey),
-                              style: {
-                                padding: '4px 10px', borderRadius: '6px', fontSize: '0.75rem', fontWeight: cardGeoMetric === mKey ? 700 : 500,
-                                backgroundColor: cardGeoMetric === mKey ? '#38BDF8' : 'transparent',
-                                color: cardGeoMetric === mKey ? '#0F172A' : '#9CA3AF',
-                                border: 'none', cursor: 'pointer', transition: 'all 150ms ease'
-                              }
-                            }, mKey.charAt(0).toUpperCase() + mKey.slice(1)))
-                          )
-                        ),
-
-                        /* Regions List with Bars, Percentages, and Sub-metrics */
-                        regionalPerformanceData.items.length > 0 ? React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: 12 } },
-                          (() => {
-                            const items = [...regionalPerformanceData.items];
-                            if (cardGeoMetric === 'orders') items.sort((a, b) => b.orders - a.orders);
-                            else if (cardGeoMetric === 'customers') items.sort((a, b) => b.customers - a.customers);
-                            else items.sort((a, b) => b.revenue - a.revenue);
-
-                            const displayed = cardShowAllRegions ? items : items.slice(0, 5);
-                            const barColors = ['#38BDF8', '#8B5CF6', '#34D399', '#F59E0B', '#EC4899', '#60A5FA'];
-
-                            return displayed.map((item, idx) => {
-                              const valDisplay = cardGeoMetric === 'revenue'
-                                ? (systemCurrency === 'EUR' ? `€${Math.round(item.revenue).toLocaleString()}` : `$${Math.round(item.revenue).toLocaleString()}`)
-                                : cardGeoMetric === 'orders'
-                                ? `${item.orders.toLocaleString()} orders`
-                                : `${item.customers.toLocaleString()} customers`;
-
-                              const pctVal = cardGeoMetric === 'revenue' ? item.revenuePct : cardGeoMetric === 'orders' ? item.ordersPct : item.customersPct;
-
-                              return React.createElement('div', { key: idx },
-                                React.createElement('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.84375rem', marginBottom: 4 } },
-                                  React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 8 } },
-                                    React.createElement('span', { style: { fontSize: '0.75rem', color: '#6B7280', fontWeight: 700, width: 18 } }, `#${idx + 1}`),
-                                    React.createElement('span', { style: { color: '#F9FAFB', fontWeight: 600 } }, item.name)
-                                  ),
-                                  React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 10 } },
-                                    React.createElement('span', { style: { color: '#38BDF8', fontWeight: 700 } }, valDisplay),
-                                    React.createElement('span', { style: { color: '#9CA3AF', fontSize: '0.75rem' } }, `${pctVal.toFixed(1)}%`)
-                                  )
-                                ),
-                                React.createElement('div', { style: { width: '100%', height: 6, backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 3, overflow: 'hidden' } },
-                                  React.createElement('div', { style: { width: `${Math.max(2, Math.min(100, pctVal))}%`, height: '100%', backgroundColor: barColors[idx % barColors.length], borderRadius: 3, transition: 'width 300ms ease' } })
-                                ),
-                                React.createElement('div', { style: { display: 'flex', gap: 12, fontSize: '0.71875rem', color: '#6B7280', marginTop: 3 } },
-                                  React.createElement('span', null, `Rev: $${Math.round(item.revenue).toLocaleString()}`),
-                                  React.createElement('span', null, `Orders: ${item.orders.toLocaleString()}`),
-                                  React.createElement('span', null, `Customers: ${item.customers.toLocaleString()}`)
-                                )
-                              );
-                            });
-                          })(),
-
-                          /* View All Toggle Footer */
-                          regionalPerformanceData.items.length > 5 && React.createElement('div', { style: { display: 'flex', justifyContent: 'center', marginTop: 6 } },
-                            React.createElement('button', {
-                              type: 'button',
-                              onClick: () => setCardShowAllRegions(!cardShowAllRegions),
-                              style: { background: 'none', border: 'none', color: '#38BDF8', fontSize: '0.78125rem', fontWeight: 600, cursor: 'pointer' }
-                            }, cardShowAllRegions ? 'Collapse to Top 5 ▲' : `View All (${regionalPerformanceData.items.length} regions) ▼`)
-                          )
-                        ) : React.createElement('div', { style: { padding: '24px 0', textAlign: 'center', color: '#9CA3AF', fontSize: '0.84375rem' } },
-                          'Geographic analysis unavailable — selected dataset does not contain recognizable region, state, or country fields.'
-                        )
-                      ),
-
-                      /* Card 2: Categorical Distribution Card (Redesigned with Dynamic Title, Dimension Switcher & Dynamic Insight Row) */
-                      React.createElement('div', { className: 'card-v2', style: { padding: 20 } },
-                        /* Header with Dynamic Title and Dropdown Selector */
-                        React.createElement('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, flexWrap: 'wrap', gap: 8 } },
-                          React.createElement('h3', { style: { fontSize: '1rem', fontWeight: 600, margin: 0, color: '#F9FAFB' } },
-                            distributionCardData.activeDimObj ? `${distributionCardData.activeDimObj.label} Distribution` : 'Distribution Analysis'
-                          ),
-                          React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 8 } },
-                            distributionCardData.availableDimensions.length > 1 && React.createElement('select', {
-                              value: distributionDimension,
-                              onChange: (e) => setDistributionDimension(e.target.value),
-                              style: {
-                                backgroundColor: '#1F2937', color: '#38BDF8', border: '1px solid rgba(56, 189, 248, 0.3)',
-                                borderRadius: '6px', padding: '3px 8px', fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer', maxWidth: 160
-                              }
-                            },
-                              (distributionCardData.availableDimensions || []).map(d => React.createElement('option', { key: d.key, value: d.key }, d.label))
-                            ),
-                            React.createElement('button', { className: 'btn-text-action-primary', onClick: () => handleNavigate('analytics') }, 'Explore Analytics →')
-                          )
-                        ),
-
-                        /* Distribution Items with Bars and Counts */
-                        distributionCardData.items.length > 0 ? React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: 12 } },
-                          (() => {
-                            const colors = ['#38BDF8', '#8B5CF6', '#34D399', '#F59E0B', '#EC4899', '#60A5FA'];
-                            const topItems = (distributionCardData.items || []).slice(0, 4);
-
-                            return topItems.map((item, idx) => React.createElement('div', { key: idx },
-                              React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between', fontSize: '0.84375rem', marginBottom: 4 } },
-                                React.createElement('span', { style: { color: '#F9FAFB', fontWeight: 600 } }, item.name),
-                                React.createElement('span', { style: { color: '#9CA3AF', fontSize: '0.78125rem' } }, `${item.count.toLocaleString()} transactions (${item.pct}%)`)
-                              ),
-                              React.createElement('div', { style: { width: '100%', height: 6, backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 3, overflow: 'hidden' } },
-                                React.createElement('div', { style: { width: `${Math.max(2, Math.min(100, item.pct))}%`, height: '100%', backgroundColor: colors[idx % colors.length], borderRadius: 3, transition: 'width 300ms ease' } })
-                              )
-                            ));
-                          })(),
-
-                          /* Dynamic Insight Row at Bottom */
-                          distributionCardData.topInsight && React.createElement('div', {
-                            style: {
-                              fontSize: '0.75rem', color: '#38BDF8', backgroundColor: 'rgba(56, 189, 248, 0.08)',
-                              borderLeft: '3px solid #38BDF8', padding: '6px 10px', borderRadius: '0 6px 6px 0', marginTop: 4, fontWeight: 600
-                            }
-                          }, distributionCardData.topInsight)
-                        ) : React.createElement('div', { style: { padding: '24px 0', textAlign: 'center', color: '#9CA3AF', fontSize: '0.84375rem' } },
-                          'Category distribution unavailable — no categorical columns detected in this dataset.'
-                        )
-                      )
-                    ),
-
-                    /* 7. INTELLIGENCE SUMMARY ROW (Redesigned Cards for AI Forecast & Anomaly Center) */
-                    React.createElement('div', { className: 'dense-grid-4', style: { marginBottom: 24 } },
-                      /* Card A: AI Forecast Summary (Redesigned with Target Selector & Horizon Controls) */
-                      React.createElement('div', { className: 'card-v2', style: { padding: 18 } },
-                        React.createElement('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 } },
-                          React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 8, color: '#38BDF8', fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase' } },
-                            React.createElement(SparklesIcon, { size: 14, color: '#38BDF8' }),
-                            'AI FORECAST ENGINE'
-                          ),
-                          React.createElement('span', {
-                            className: 'badge',
-                            style: {
-                              backgroundColor: forecastEngineData.canForecast ? 'rgba(52, 211, 153, 0.15)' : 'rgba(248, 113, 113, 0.15)',
-                              color: forecastEngineData.canForecast ? '#34D399' : '#F87171',
-                              fontSize: '0.6875rem', fontWeight: 700
-                            }
-                          }, forecastEngineData.canForecast ? 'AVAILABLE' : 'UNAVAILABLE')
-                        ),
-
-                        forecastEngineData.canForecast ? React.createElement(React.Fragment, null,
-                          /* Target Selector Dropdown + Horizon Controls */
-                          React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12 } },
-                            React.createElement('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 } },
-                              React.createElement('label', { style: { fontSize: '0.72rem', color: '#9CA3AF', fontWeight: 600 } }, 'TARGET METRIC:'),
-                              React.createElement('select', {
-                                value: cardForecastTargetCol || canonicalSchemaMapping.revenueCol || '',
-                                onChange: (e) => setCardForecastTargetCol(e.target.value),
-                                style: {
-                                  backgroundColor: '#1F2937', color: '#38BDF8', border: '1px solid rgba(56, 189, 248, 0.3)',
-                                  borderRadius: '6px', padding: '3px 8px', fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer', maxWidth: 160
-                                }
-                              },
-                                (canonicalSchemaMapping.numericTargets || []).map(col => React.createElement('option', { key: col, value: col }, col))
-                              )
-                            ),
-                            React.createElement('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 } },
-                              React.createElement('span', { style: { fontSize: '0.72rem', color: '#9CA3AF', fontWeight: 600 } }, 'HORIZON:'),
-                              React.createElement('div', { style: { display: 'flex', gap: 4 } },
-                                ['7', '30', '90'].map(h => React.createElement('button', {
-                                  key: h,
-                                  type: 'button',
-                                  onClick: () => setCardForecastHorizon(h),
-                                  style: {
-                                    padding: '2px 8px', borderRadius: '4px', fontSize: '0.72rem', fontWeight: cardForecastHorizon === h ? 700 : 500,
-                                    backgroundColor: cardForecastHorizon === h ? '#38BDF8' : '#1F2937',
-                                    color: cardForecastHorizon === h ? '#0F172A' : '#9CA3AF',
-                                    border: 'none', cursor: 'pointer'
-                                  }
-                                }, `${h}D`))
-                              )
-                            )
-                          ),
-
-                          /* Main Projected Metric Display */
-                          React.createElement('div', { style: { marginBottom: 10 } },
-                            React.createElement('div', { style: { fontSize: '0.72rem', color: '#9CA3AF', textTransform: 'uppercase' } }, `${cardForecastHorizon}-DAY PROJECTED FORECAST`),
-                            React.createElement('div', { style: { fontSize: '1.4rem', fontWeight: 800, color: '#F9FAFB' } }, forecastEngineData.projectedDisplay),
-                            React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 8, marginTop: 2 } },
-                              React.createElement('span', { className: 'kpi-delta-pill kpi-delta-positive', style: { fontSize: '0.72rem' } }, forecastEngineData.historicalGrowthPct),
-                              React.createElement('span', { style: { fontSize: '0.72rem', color: '#34D399', fontWeight: 600 } }, `CI: ${forecastEngineData.ciText}`)
-                            )
-                          ),
-
-                          /* Confidence & Sub-text */
-                          React.createElement('div', { style: { fontSize: '0.71875rem', color: '#9CA3AF', marginBottom: 12, padding: '6px 8px', borderRadius: '6px', backgroundColor: 'rgba(255,255,255,0.03)' } },
-                            `Model Confidence: ${forecastEngineData.confidenceScore} (Historical trend projection across ${overviewMetricsData.activeRows.length.toLocaleString()} rows)`
-                          )
-                        ) : React.createElement('div', { style: { padding: '16px 0', fontSize: '0.8125rem', color: '#9CA3AF', textAlign: 'center' } },
-                          'Forecast unavailable — requires date column and numeric metric in active dataset.'
-                        ),
-
-                        React.createElement('div', {
-                          onClick: () => handleNavigate('forecasting'),
-                          style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.75rem', color: '#38BDF8', fontWeight: 600, cursor: 'pointer', paddingTop: 8, borderTop: '1px solid rgba(255,255,255,0.06)' }
-                        },
-                          React.createElement('span', null, 'Open Forecast Engine'),
-                          React.createElement('span', null, '→')
-                        )
-                      ),
-
-                      /* Card B: Anomaly Center Summary (Redesigned with Statistical Signal Explanation & Severity Badges) */
-                      React.createElement('div', { className: 'card-v2', style: { padding: 18 } },
-                        React.createElement('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 } },
-                          React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 8, color: '#F87171', fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase' } },
-                            React.createElement(SparklesIcon, { size: 14, color: '#F87171' }),
-                            'ANOMALY CENTER'
-                          ),
-                          React.createElement('span', {
-                            className: 'badge',
-                            style: {
-                              backgroundColor: anomalyCenterData.hasAnomalies ? 'rgba(248, 113, 113, 0.15)' : 'rgba(52, 211, 153, 0.15)',
-                              color: anomalyCenterData.hasAnomalies ? '#F87171' : '#34D399',
-                              fontSize: '0.6875rem', fontWeight: 700
-                            }
-                          }, anomalyCenterData.hasAnomalies ? 'SIGNALS DETECTED' : 'CLEAR')
-                        ),
-
-                        React.createElement('div', { style: { marginBottom: 10 } },
-                          React.createElement('div', { style: { fontSize: '1.4rem', fontWeight: 800, color: '#F9FAFB' } },
-                            `${anomalyCenterData.totalOutliers.toLocaleString()} Potential Signals`
-                          ),
-                          React.createElement('div', { style: { fontSize: '0.72rem', color: '#9CA3AF', marginTop: 2 } },
-                            `IQR statistical audit across ${anomalyCenterData.auditedColCount} numeric columns`
-                          )
-                        ),
-
-                        /* Explanatory note requirement: Statistical outliers are signals requiring investigation, not automatically confirmed failures */
-                        React.createElement('div', { style: { fontSize: '0.71875rem', color: '#FBBF24', backgroundColor: 'rgba(251, 191, 36, 0.08)', borderLeft: '3px solid #FBBF24', padding: '6px 8px', borderRadius: '0 6px 6px 0', marginBottom: 12, lineHeight: 1.4 } },
-                          '⚠️ Statistical outliers indicate non-standard data distributions requiring investigation — not confirmed business errors.'
-                        ),
-
-                        /* Severity Classification Breakdown */
-                        anomalyCenterData.hasAnomalies && React.createElement('div', { style: { display: 'flex', gap: 6, marginBottom: 12, flexWrap: 'wrap' } },
-                          React.createElement('span', { className: 'badge', style: { backgroundColor: 'rgba(248, 113, 113, 0.2)', color: '#F87171', fontSize: '0.6875rem', padding: '2px 6px' } },
-                            `Crit: ${anomalyCenterData.severity.critical.toLocaleString()} (${anomalyCenterData.severity.criticalPct}%)`
-                          ),
-                          React.createElement('span', { className: 'badge', style: { backgroundColor: 'rgba(251, 191, 36, 0.2)', color: '#FBBF24', fontSize: '0.6875rem', padding: '2px 6px' } },
-                            `High: ${anomalyCenterData.severity.high.toLocaleString()} (${anomalyCenterData.severity.highPct}%)`
-                          ),
-                          React.createElement('span', { className: 'badge', style: { backgroundColor: 'rgba(56, 189, 248, 0.15)', color: '#38BDF8', fontSize: '0.6875rem', padding: '2px 6px' } },
-                            `Mod: ${anomalyCenterData.severity.moderate.toLocaleString()}`
-                          )
-                        ),
-
-                        /* Top Affected Columns list */
-                        anomalyCenterData.topAffected.length > 0 && React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 12 } },
-                          React.createElement('div', { style: { fontSize: '0.72rem', fontWeight: 700, color: '#9CA3AF', textTransform: 'uppercase' } }, 'TOP AFFECTED COLUMNS:'),
-                          (anomalyCenterData.topAffected || []).map((col, idx) => React.createElement('div', { key: idx, style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.78125rem' } },
-                            React.createElement('span', { style: { color: '#E2E8F0', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', maxWidth: 140 } }, col.name),
-                            React.createElement('span', { style: { color: '#F87171', fontWeight: 700 } }, `${col.pct}%`)
-                          ))
-                        ),
-
-                        React.createElement('div', {
-                          onClick: () => handleNavigate('anomaly'),
-                          style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.75rem', color: '#F87171', fontWeight: 600, cursor: 'pointer', paddingTop: 8, borderTop: '1px solid rgba(255,255,255,0.06)' }
-                        },
-                          React.createElement('span', null, 'Inspect Anomalies'),
-                          React.createElement('span', null, '→')
-                        )
-                      ),
-
-                      /* Card C: Geographic Intelligence (Redesigned with Active Markets, Detected Spatial Column & Dynamic Top Market Share) */
-                      React.createElement('div', { className: 'card-v2 interactive-card', onClick: () => handleNavigate('geo'), style: { padding: 18, cursor: 'pointer' } },
-                        React.createElement('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 } },
-                          React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 8, color: '#34D399', fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase' } },
-                            React.createElement(GlobeIcon, { size: 14, color: '#34D399' }),
-                            'GEOGRAPHIC INTELLIGENCE'
-                          ),
-                          React.createElement('span', {
-                            className: 'badge',
-                            style: {
-                              backgroundColor: canonicalSchemaMapping.latCol && canonicalSchemaMapping.lngCol ? 'rgba(52, 211, 153, 0.15)' : 'rgba(56, 189, 248, 0.15)',
-                              color: canonicalSchemaMapping.latCol && canonicalSchemaMapping.lngCol ? '#34D399' : '#38BDF8',
-                              fontSize: '0.6875rem', fontWeight: 700
-                            }
-                          }, canonicalSchemaMapping.latCol && canonicalSchemaMapping.lngCol ? 'SPATIAL ACTIVE' : 'REGIONAL ACTIVE')
-                        ),
-
-                        (() => {
-                          const activeGeoCol = regionalPerformanceData.geoCol || canonicalSchemaMapping.stateCol || canonicalSchemaMapping.countryCol || 'Order Region';
-                          const hasGeo = Boolean(activeGeoCol && regionalPerformanceData.items.length > 0);
-                          const marketCount = regionalPerformanceData.items.length;
-                          const topItem = regionalPerformanceData.items[0] || null;
-                          const topInsight = (topItem && topItem.revenuePct > 0) ? `Top Market: ${topItem.name} • ${topItem.revenuePct.toFixed(0)}% revenue share` : null;
-
-                          return React.createElement(React.Fragment, null,
-                            React.createElement('div', { style: { fontSize: '1.35rem', fontWeight: 800, color: '#F9FAFB', marginBottom: 2 } },
-                              hasGeo ? `${marketCount} Active Markets` : 'Geo Unavailable'
-                            ),
-                            React.createElement('div', { style: { fontSize: '0.78125rem', color: '#9CA3AF', marginBottom: 10 } },
-                              hasGeo ? `Spatial column: ${activeGeoCol}` : 'No spatial location column'
-                            ),
-                            topInsight && React.createElement('div', { style: { fontSize: '0.75rem', color: '#34D399', backgroundColor: 'rgba(52, 211, 153, 0.08)', borderLeft: '3px solid #34D399', padding: '6px 8px', borderRadius: '0 6px 6px 0', marginBottom: 12, fontWeight: 600 } },
-                              topInsight
-                            )
-                          );
-                        })(),
-
-                        React.createElement('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.75rem', color: '#34D399', fontWeight: 600, paddingTop: 8, borderTop: '1px solid rgba(255,255,255,0.06)' } },
-                          React.createElement('span', null, 'Open Geo Studio'),
-                          React.createElement('span', null, '→')
-                        )
-                      ),
-
-                      /* Card D: Dataset Profile (Redesigned Data-Health Summary with Dynamic Schema Capability Badges) */
-                      React.createElement('div', { className: 'card-v2 interactive-card', onClick: () => handleNavigate('datasets'), style: { padding: 18, cursor: 'pointer' } },
-                        React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 8, color: '#8B5CF6', fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', marginBottom: 10 } },
-                          React.createElement(DatabaseIcon, { size: 14, color: '#8B5CF6' }),
-                          'DATASET PROFILE'
-                        ),
-
-                        (() => {
-                          const qualityScore = activeDatasetDetails?.quality?.quality_score || activeDatasetDetails?.statistics?.completeness || 99;
-                          const s = canonicalSchemaMapping;
-
-                          const detectedBadges = [];
-                          if (s.dateCol) detectedBadges.push('✓ Date');
-                          if (s.revenueCol) detectedBadges.push('✓ Revenue');
-                          if (s.customerCol) detectedBadges.push('✓ Customer');
-                          if (s.geoCol) detectedBadges.push('✓ Geography');
-                          if (s.categoryCol || cols.some(c => (c.column_name || '').toLowerCase().includes('type'))) detectedBadges.push('✓ Transaction Type');
-
-                          return React.createElement(React.Fragment, null,
-                            React.createElement('div', { style: { fontSize: '1.35rem', fontWeight: 800, color: '#F9FAFB', marginBottom: 2 } },
-                              `${cols.length} Cols • ${qualityScore}% Quality`
-                            ),
-                            React.createElement('div', { style: { fontSize: '0.78125rem', color: '#9CA3AF', marginBottom: 10 } },
-                              `${activeRows.length.toLocaleString()} Active Records`
-                            ),
-                            detectedBadges.length > 0 && React.createElement('div', { style: { display: 'flex', gap: 4, flexWrap: 'wrap', marginBottom: 12 } },
-                              detectedBadges.map((bText, i) => React.createElement('span', {
-                                key: i,
-                                className: 'badge',
-                                style: { backgroundColor: 'rgba(139, 92, 246, 0.15)', color: '#A78BFA', fontSize: '0.6875rem', padding: '2px 6px', fontWeight: 600 }
-                              }, bText))
-                            )
-                          );
-                        })(),
-
-                        React.createElement('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.75rem', color: '#8B5CF6', fontWeight: 600, paddingTop: 8, borderTop: '1px solid rgba(255,255,255,0.06)' } },
-                          React.createElement('span', null, 'Open Dataset Profiler'),
-                          React.createElement('span', null, '→')
-                        )
-                      )
-                    ),
-
-                    /* 8. CAPABILITY-AWARE QUICK ACTIONS BAR */
+                    /* 5. TWO-COLUMN CALM SECTION: DATASETS IN WORKSPACE + CONTEXTUAL WORKFLOWS */
                     (() => {
                       const hasTemporalCol = (overviewCols || []).some(c => c.is_temporal || ['date', 'timestamp', 'createdat', 'recorddate', 'time', 'dateorders'].some(k => (c.column_name || '').toLowerCase().replace(/[^a-z0-9]/g, '').includes(k)));
                       const hasNumericCols = (overviewCols || []).some(c => c.is_numeric);
@@ -15631,66 +15616,336 @@ window.CANONICAL_PROJECTS = CANONICAL_PROJECTS;
                       const isGeoCapable = hasGeoCols;
 
                       return React.createElement('div', {
-                        style: {
-                          padding: '16px 20px', borderRadius: '16px', backgroundColor: '#111827',
-                          border: '1px solid rgba(255, 255, 255, 0.08)', display: 'flex', alignItems: 'center',
-                          justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginBottom: 32
-                        }
+                        className: 'grid-12 animate-fade-in',
+                        style: { marginBottom: 32 }
                       },
-                        React.createElement('div', { style: { fontSize: '0.84375rem', fontWeight: 700, color: '#F9FAFB', textTransform: 'uppercase', letterSpacing: '0.04em' } },
-                          '⚡ QUICK ANALYST ACTIONS'
+                        /* Left Column (Col-7): Datasets in Workspace */
+                        React.createElement('div', { className: 'col-7' },
+                          React.createElement('div', {
+                            style: {
+                              backgroundColor: '#0E1118',
+                              border: '1px solid rgba(255, 255, 255, 0.06)',
+                              borderRadius: '16px',
+                              padding: '20px 22px',
+                              height: '100%',
+                              display: 'flex',
+                              flexDirection: 'column'
+                            }
+                          },
+                            React.createElement('div', {
+                              style: {
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                marginBottom: 12
+                              }
+                            },
+                              React.createElement('div', null,
+                                React.createElement('h3', { style: { fontSize: '1rem', fontWeight: 600, color: '#F0F2F6', margin: 0 } }, 'Datasets in Workspace'),
+                                React.createElement('div', { style: { fontSize: '0.75rem', color: 'var(--text-tertiary)', marginTop: 2 } },
+                                  'Switch active dataset context or review catalog schemas.'
+                                )
+                              ),
+                              React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 8 } },
+                                React.createElement('span', {
+                                  style: {
+                                    fontSize: '0.6875rem',
+                                    fontWeight: 700,
+                                    padding: '2px 8px',
+                                    borderRadius: '6px',
+                                    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+                                    color: 'var(--text-secondary)'
+                                  }
+                                }, `${userDatasets.length} TOTAL`),
+                                React.createElement('button', {
+                                  className: 'btn-secondary-action',
+                                  onClick: () => handleNavigate('upload'),
+                                  style: { padding: '4px 10px', fontSize: '0.75rem', borderRadius: '6px' }
+                                }, '+ Upload')
+                              )
+                            ),
+
+                            /* Dataset Rows */
+                            React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: 8, marginTop: 4 } },
+                              userDatasets.map(ds => {
+                                const isActive = selectedDs?.id === ds.id;
+                                return React.createElement('div', {
+                                  key: ds.id,
+                                  style: {
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'space-between',
+                                    padding: '10px 14px',
+                                    borderRadius: '10px',
+                                    backgroundColor: isActive ? 'rgba(0, 210, 255, 0.05)' : '#141822',
+                                    border: isActive ? '1px solid rgba(0, 210, 255, 0.3)' : '1px solid rgba(255, 255, 255, 0.04)',
+                                    transition: 'all 120ms ease'
+                                  }
+                                },
+                                  React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 10 } },
+                                    React.createElement('div', {
+                                      style: {
+                                        width: 32,
+                                        height: 32,
+                                        borderRadius: '8px',
+                                        backgroundColor: isActive ? 'rgba(0, 210, 255, 0.12)' : 'rgba(255, 255, 255, 0.04)',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        color: isActive ? 'var(--brand-cyan)' : 'var(--text-secondary)'
+                                      }
+                                    }, React.createElement(DatabaseIcon, { size: 16 })),
+                                    React.createElement('div', null,
+                                      React.createElement('div', {
+                                        style: {
+                                          fontSize: '0.84375rem',
+                                          fontWeight: 600,
+                                          color: isActive ? 'var(--brand-cyan)' : '#F0F2F6'
+                                        }
+                                      }, ds.name || ds.original_filename),
+                                      React.createElement('div', {
+                                        style: {
+                                          fontSize: '0.6875rem',
+                                          color: 'var(--text-tertiary)',
+                                          display: 'flex',
+                                          alignItems: 'center',
+                                          gap: 8,
+                                          marginTop: 2
+                                        }
+                                      },
+                                        React.createElement('span', null, `${(ds.row_count || 0).toLocaleString()} rows`),
+                                        React.createElement('span', null, '•'),
+                                        React.createElement('span', null, (ds.file_type || 'CSV').toUpperCase()),
+                                        React.createElement('span', null, '•'),
+                                        React.createElement('span', null, new Date(ds.created_at || Date.now()).toLocaleDateString())
+                                      )
+                                    )
+                                  ),
+                                  isActive ? React.createElement('span', {
+                                    style: {
+                                      fontSize: '0.6875rem',
+                                      fontWeight: 700,
+                                      color: 'var(--brand-cyan)',
+                                      backgroundColor: 'rgba(0, 210, 255, 0.12)',
+                                      padding: '3px 8px',
+                                      borderRadius: '6px',
+                                      border: '1px solid rgba(0, 210, 255, 0.3)'
+                                    }
+                                  }, 'ACTIVE CONTEXT') : React.createElement('button', {
+                                    type: 'button',
+                                    className: 'btn-secondary-action',
+                                    onClick: () => handleSwitchActiveDataset(ds.id),
+                                    style: { padding: '4px 10px', fontSize: '0.75rem', borderRadius: '6px' }
+                                  }, 'Switch')
+                                );
+                              })
+                            )
+                          )
                         ),
-                        React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' } },
-                          React.createElement('button', {
-                            className: 'quick-action-btn',
-                            onClick: () => handleNavigate('brief'),
-                            title: 'Generate Executive AI Brief'
+
+                        /* Right Column (Col-5): Contextual Workflows & Intelligence */
+                        React.createElement('div', { className: 'col-5' },
+                          React.createElement('div', {
+                            style: {
+                              backgroundColor: '#0E1118',
+                              border: '1px solid rgba(255, 255, 255, 0.06)',
+                              borderRadius: '16px',
+                              padding: '20px 22px',
+                              height: '100%',
+                              display: 'flex',
+                              flexDirection: 'column',
+                              justifyContent: 'space-between'
+                            }
                           },
-                            React.createElement(SparklesIcon, { size: 14, color: '#38BDF8' }), 'Generate AI Brief'
-                          ),
-                          React.createElement('button', {
-                            className: 'quick-action-btn',
-                            onClick: () => handleNavigate('analytics'),
-                            title: 'Analyze Active Dataset'
-                          },
-                            React.createElement(LayersIcon, { size: 14, color: '#8B5CF6' }), 'Analyze Dataset'
-                          ),
-                          React.createElement('button', {
-                            className: `quick-action-btn ${!isForecastCapable ? 'disabled' : ''}`,
-                            onClick: () => { if (isForecastCapable) handleNavigate('forecasting'); },
-                            title: isForecastCapable ? 'Run AI Time-Series Forecasting' : 'This dataset does not contain a valid temporal column and numerical target.',
-                            style: { opacity: isForecastCapable ? 1 : 0.6, cursor: isForecastCapable ? 'pointer' : 'not-allowed' }
-                          },
-                            React.createElement(SparklesIcon, { size: 14, color: isForecastCapable ? '#34D399' : '#6B7280' }),
-                            'Run Forecast',
-                            !isForecastCapable && React.createElement('span', { className: 'action-capability-pill action-capability-unavailable', style: { marginLeft: 6, fontSize: '0.625rem' } }, 'Unavailable')
-                          ),
-                          React.createElement('button', {
-                            className: `quick-action-btn ${!isAnomalyCapable ? 'disabled' : ''}`,
-                            onClick: () => { if (isAnomalyCapable) handleNavigate('anomaly'); },
-                            title: isAnomalyCapable ? 'Detect Statistical Anomalies' : 'This dataset does not contain numerical features for anomaly detection.',
-                            style: { opacity: isAnomalyCapable ? 1 : 0.6, cursor: isAnomalyCapable ? 'pointer' : 'not-allowed' }
-                          },
-                            React.createElement(SparklesIcon, { size: 14, color: isAnomalyCapable ? '#F87171' : '#6B7280' }),
-                            'Detect Anomalies',
-                            !isAnomalyCapable && React.createElement('span', { className: 'action-capability-pill action-capability-unavailable', style: { marginLeft: 6, fontSize: '0.625rem' } }, 'Unavailable')
-                          ),
-                          React.createElement('button', {
-                            className: `quick-action-btn ${!isGeoCapable ? 'disabled' : ''}`,
-                            onClick: () => { if (isGeoCapable) handleNavigate('geo'); },
-                            title: isGeoCapable ? 'Open Geographic Intelligence' : 'This dataset does not contain geographic columns.',
-                            style: { opacity: isGeoCapable ? 1 : 0.6, cursor: isGeoCapable ? 'pointer' : 'not-allowed' }
-                          },
-                            React.createElement(GlobeIcon, { size: 14, color: isGeoCapable ? '#38BDF8' : '#6B7280' }),
-                            'Geographic Analysis',
-                            !isGeoCapable && React.createElement('span', { className: 'action-capability-pill action-capability-unavailable', style: { marginLeft: 6, fontSize: '0.625rem' } }, 'Unavailable')
-                          ),
-                          React.createElement('button', {
-                            className: 'quick-action-btn',
-                            onClick: () => handleNavigate('copilot'),
-                            title: 'Open Conversational AI Chat Copilot'
-                          },
-                            React.createElement(SparklesIcon, { size: 14, color: '#A78BFA' }), 'Open AI Copilot'
+                            React.createElement('div', null,
+                              React.createElement('div', {
+                                style: {
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'space-between',
+                                  marginBottom: 12
+                                }
+                              },
+                                React.createElement('div', null,
+                                  React.createElement('h3', { style: { fontSize: '1rem', fontWeight: 600, color: '#F0F2F6', margin: 0 } }, 'Contextual Workflows'),
+                                  React.createElement('div', { style: { fontSize: '0.75rem', color: 'var(--text-tertiary)', marginTop: 2 } },
+                                    'Intelligence modules tailored to active dataset.'
+                                  )
+                                ),
+                                React.createElement('span', {
+                                  style: {
+                                    fontSize: '0.6875rem',
+                                    fontWeight: 700,
+                                    padding: '2px 8px',
+                                    borderRadius: '6px',
+                                    backgroundColor: 'rgba(0, 210, 255, 0.08)',
+                                    color: 'var(--brand-cyan)'
+                                  }
+                                }, 'AI AUGMENTED')
+                              ),
+
+                              /* Action Item 1: Executive AI Brief */
+                              React.createElement('div', {
+                                onClick: () => handleNavigate('brief'),
+                                style: {
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'space-between',
+                                  padding: '10px 12px',
+                                  borderRadius: '10px',
+                                  backgroundColor: '#141822',
+                                  border: '1px solid rgba(255, 255, 255, 0.04)',
+                                  marginBottom: 8,
+                                  cursor: 'pointer'
+                                }
+                              },
+                                React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 10 } },
+                                  React.createElement('div', { style: { width: 28, height: 28, borderRadius: '6px', backgroundColor: 'rgba(0, 210, 255, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' } },
+                                    React.createElement(SparklesIcon, { size: 14, color: 'var(--brand-cyan)' })
+                                  ),
+                                  React.createElement('div', null,
+                                    React.createElement('div', { style: { fontSize: '0.8125rem', fontWeight: 600, color: '#F0F2F6' } }, 'Executive AI Brief'),
+                                    React.createElement('div', { style: { fontSize: '0.6875rem', color: 'var(--text-tertiary)' } }, 'Distilled narrative, key drivers & anomalies')
+                                  )
+                                ),
+                                React.createElement('span', { style: { color: 'var(--brand-cyan)', fontSize: '0.8125rem', fontWeight: 700 } }, '→')
+                              ),
+
+                              /* Action Item 2: Analytics Studio */
+                              React.createElement('div', {
+                                onClick: () => handleNavigate('analytics'),
+                                style: {
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'space-between',
+                                  padding: '10px 12px',
+                                  borderRadius: '10px',
+                                  backgroundColor: '#141822',
+                                  border: '1px solid rgba(255, 255, 255, 0.04)',
+                                  marginBottom: 8,
+                                  cursor: 'pointer'
+                                }
+                              },
+                                React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 10 } },
+                                  React.createElement('div', { style: { width: 28, height: 28, borderRadius: '6px', backgroundColor: 'rgba(139, 92, 246, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' } },
+                                    React.createElement(LayersIcon, { size: 14, color: '#8B5CF6' })
+                                  ),
+                                  React.createElement('div', null,
+                                    React.createElement('div', { style: { fontSize: '0.8125rem', fontWeight: 600, color: '#F0F2F6' } }, 'Deep-Dive Analytics Studio'),
+                                    React.createElement('div', { style: { fontSize: '0.6875rem', color: 'var(--text-tertiary)' } }, 'Multi-dimensional pivot, metrics & correlation')
+                                  )
+                                ),
+                                React.createElement('span', { style: { color: '#8B5CF6', fontSize: '0.8125rem', fontWeight: 700 } }, '→')
+                              ),
+
+                              /* Action Item 3: Time-Series Forecasting */
+                              React.createElement('div', {
+                                onClick: () => { if (isForecastCapable) handleNavigate('forecasting'); },
+                                style: {
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'space-between',
+                                  padding: '10px 12px',
+                                  borderRadius: '10px',
+                                  backgroundColor: '#141822',
+                                  border: '1px solid rgba(255, 255, 255, 0.04)',
+                                  marginBottom: 8,
+                                  opacity: isForecastCapable ? 1 : 0.6,
+                                  cursor: isForecastCapable ? 'pointer' : 'not-allowed'
+                                }
+                              },
+                                React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 10 } },
+                                  React.createElement('div', { style: { width: 28, height: 28, borderRadius: '6px', backgroundColor: 'rgba(52, 211, 153, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' } },
+                                    React.createElement(SparklesIcon, { size: 14, color: isForecastCapable ? '#34D399' : '#6B7280' })
+                                  ),
+                                  React.createElement('div', null,
+                                    React.createElement('div', { style: { fontSize: '0.8125rem', fontWeight: 600, color: '#F0F2F6' } }, 'AI Time-Series Forecasting'),
+                                    React.createElement('div', { style: { fontSize: '0.6875rem', color: 'var(--text-tertiary)' } },
+                                      isForecastCapable ? 'Predictive trajectory with confidence bands' : 'Unavailable — requires temporal & numeric fields'
+                                    )
+                                  )
+                                ),
+                                React.createElement('span', { style: { color: isForecastCapable ? '#34D399' : '#6B7280', fontSize: '0.8125rem', fontWeight: 700 } }, isForecastCapable ? '→' : '—')
+                              ),
+
+                              /* Action Item 4: Statistical Anomaly Center */
+                              React.createElement('div', {
+                                onClick: () => { if (isAnomalyCapable) handleNavigate('anomaly'); },
+                                style: {
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'space-between',
+                                  padding: '10px 12px',
+                                  borderRadius: '10px',
+                                  backgroundColor: '#141822',
+                                  border: '1px solid rgba(255, 255, 255, 0.04)',
+                                  marginBottom: 8,
+                                  opacity: isAnomalyCapable ? 1 : 0.6,
+                                  cursor: isAnomalyCapable ? 'pointer' : 'not-allowed'
+                                }
+                              },
+                                React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 10 } },
+                                  React.createElement('div', { style: { width: 28, height: 28, borderRadius: '6px', backgroundColor: 'rgba(248, 113, 113, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' } },
+                                    React.createElement(SparklesIcon, { size: 14, color: isAnomalyCapable ? '#F87171' : '#6B7280' })
+                                  ),
+                                  React.createElement('div', null,
+                                    React.createElement('div', { style: { fontSize: '0.8125rem', fontWeight: 600, color: '#F0F2F6' } }, 'Statistical Anomaly Center'),
+                                    React.createElement('div', { style: { fontSize: '0.6875rem', color: 'var(--text-tertiary)' } },
+                                      isAnomalyCapable ? `${anomalyCenterData.totalOutliers.toLocaleString()} potential signals across ${anomalyCenterData.auditedColCount} cols` : 'Unavailable — requires numeric fields'
+                                    )
+                                  )
+                                ),
+                                React.createElement('span', { style: { color: isAnomalyCapable ? '#F87171' : '#6B7280', fontSize: '0.8125rem', fontWeight: 700 } }, isAnomalyCapable ? '→' : '—')
+                              ),
+
+                              /* Action Item 5: Geographic Intelligence */
+                              React.createElement('div', {
+                                onClick: () => { if (isGeoCapable) handleNavigate('geo'); },
+                                style: {
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'space-between',
+                                  padding: '10px 12px',
+                                  borderRadius: '10px',
+                                  backgroundColor: '#141822',
+                                  border: '1px solid rgba(255, 255, 255, 0.04)',
+                                  marginBottom: 8,
+                                  opacity: isGeoCapable ? 1 : 0.6,
+                                  cursor: isGeoCapable ? 'pointer' : 'not-allowed'
+                                }
+                              },
+                                React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 10 } },
+                                  React.createElement('div', { style: { width: 28, height: 28, borderRadius: '6px', backgroundColor: 'rgba(56, 189, 248, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' } },
+                                    React.createElement(GlobeIcon, { size: 14, color: isGeoCapable ? '#38BDF8' : '#6B7280' })
+                                  ),
+                                  React.createElement('div', null,
+                                    React.createElement('div', { style: { fontSize: '0.8125rem', fontWeight: 600, color: '#F0F2F6' } }, 'Geographic Analysis'),
+                                    React.createElement('div', { style: { fontSize: '0.6875rem', color: 'var(--text-tertiary)' } },
+                                      isGeoCapable ? 'Spatial distribution & regional concentration' : 'Unavailable — requires geographic fields'
+                                    )
+                                  )
+                                ),
+                                React.createElement('span', { style: { color: isGeoCapable ? '#38BDF8' : '#6B7280', fontSize: '0.8125rem', fontWeight: 700 } }, isGeoCapable ? '→' : '—')
+                              )
+                            ),
+
+                            /* Bottom Copilot Trigger */
+                            React.createElement('button', {
+                              className: 'btn-primary-action',
+                              onClick: () => handleNavigate('copilot'),
+                              style: {
+                                width: '100%',
+                                height: 38,
+                                borderRadius: '10px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: 8,
+                                fontSize: '0.8125rem',
+                                fontWeight: 600,
+                                marginTop: 12
+                              }
+                            }, React.createElement(SparklesIcon, { size: 14, color: '#08090C' }), 'Ask AI Copilot')
                           )
                         )
                       );
