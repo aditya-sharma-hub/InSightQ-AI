@@ -27,37 +27,86 @@ dotenv.config({ path: path.join(__dirname, '..', '.env') });
 const CANONICAL_SUPABASE_URL = 'https://qldrqdnjpohyuhqvirmc.supabase.co';
 const CANONICAL_SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_uPbLIWSlLfxv8NZbzN1Drw_YPTr21t1';
 
-// Canonical Supabase Environment Resolvers (Supports VITE_, NEXT_PUBLIC_, and standard SUPABASE_ prefixes)
-const resolveSupabaseUrl = () => {
-  return (
-    process.env.VITE_SUPABASE_URL ||
-    process.env.NEXT_PUBLIC_SUPABASE_URL ||
-    process.env.SUPABASE_URL ||
-    process.env.REACT_APP_SUPABASE_URL ||
-    CANONICAL_SUPABASE_URL
-  ).trim();
-};
+// Clean environment variable helper that handles quotes, whitespace, and pseudo-falsy values
+function cleanEnvValue(val) {
+  if (typeof val !== 'string') return '';
+  let s = val.trim();
+  if ((s.startsWith('"') && s.endsWith('"')) || (s.startsWith("'") && s.endsWith("'"))) {
+    s = s.slice(1, -1).trim();
+  }
+  if (s === 'undefined' || s === 'null') return '';
+  return s;
+}
 
-const resolveSupabaseKey = () => {
-  const key = (
-    process.env.VITE_SUPABASE_PUBLISHABLE_KEY ||
-    process.env.VITE_SUPABASE_ANON_KEY ||
-    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
-    process.env.SUPABASE_PUBLISHABLE_KEY ||
-    process.env.SUPABASE_ANON_KEY ||
-    process.env.REACT_APP_SUPABASE_ANON_KEY ||
-    CANONICAL_SUPABASE_PUBLISHABLE_KEY
-  ).trim();
+// Canonical Supabase Environment Resolvers with Safe Diagnostic Tracing
+// Supports VITE_, NEXT_PUBLIC_, and standard SUPABASE_ prefixes
+const resolveSupabaseUrlWithDiagnostics = () => {
+  const envSources = [
+    ['env:VITE_SUPABASE_URL', process.env.VITE_SUPABASE_URL],
+    ['env:NEXT_PUBLIC_SUPABASE_URL', process.env.NEXT_PUBLIC_SUPABASE_URL],
+    ['env:SUPABASE_URL', process.env.SUPABASE_URL],
+    ['env:REACT_APP_SUPABASE_URL', process.env.REACT_APP_SUPABASE_URL]
+  ];
 
-  // Guard against exposing service_role or backend secrets to browser
-  if (key && (key.startsWith('sb_secret_') || key.includes('service_role'))) {
-    console.error('[Security Violation] Service role or secret key detected in publishable key variable. Refusing to expose to frontend.');
-    return '';
+  for (const [source, val] of envSources) {
+    const cleaned = cleanEnvValue(val);
+    if (cleaned.startsWith('https://') || cleaned.startsWith('http://')) {
+      return { url: cleaned, source, isConfigured: true };
+    }
   }
 
-  return key;
+  // Fallback to canonical public project Supabase URL
+  if (CANONICAL_SUPABASE_URL) {
+    return { url: CANONICAL_SUPABASE_URL, source: 'canonical_fallback', isConfigured: true };
+  }
+
+  return { url: '', source: 'none', isConfigured: false };
 };
+
+const resolveSupabaseKeyWithDiagnostics = () => {
+  const envSources = [
+    ['env:VITE_SUPABASE_PUBLISHABLE_KEY', process.env.VITE_SUPABASE_PUBLISHABLE_KEY],
+    ['env:VITE_SUPABASE_ANON_KEY', process.env.VITE_SUPABASE_ANON_KEY],
+    ['env:NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY', process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY],
+    ['env:NEXT_PUBLIC_SUPABASE_ANON_KEY', process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY],
+    ['env:SUPABASE_PUBLISHABLE_KEY', process.env.SUPABASE_PUBLISHABLE_KEY],
+    ['env:SUPABASE_ANON_KEY', process.env.SUPABASE_ANON_KEY],
+    ['env:REACT_APP_SUPABASE_ANON_KEY', process.env.REACT_APP_SUPABASE_ANON_KEY]
+  ];
+
+  let secretKeyRejected = false;
+
+  for (const [source, val] of envSources) {
+    const cleaned = cleanEnvValue(val);
+    if (!cleaned) continue;
+
+    // Guard against exposing service_role or backend secrets to browser
+    if (cleaned.startsWith('sb_secret_') || cleaned.includes('service_role')) {
+      console.error('[Security Violation] Secret or service_role key detected in ' + source + '. Refusing to expose to frontend.');
+      secretKeyRejected = true;
+      continue;
+    }
+
+    if (cleaned.length > 20) {
+      return { key: cleaned, source, isConfigured: true, secretKeyRejected };
+    }
+  }
+
+  // Fallback to canonical public project publishable key if environment is unset or rejected
+  if (CANONICAL_SUPABASE_PUBLISHABLE_KEY) {
+    return {
+      key: CANONICAL_SUPABASE_PUBLISHABLE_KEY,
+      source: 'canonical_fallback',
+      isConfigured: true,
+      secretKeyRejected
+    };
+  }
+
+  return { key: '', source: 'none', isConfigured: false, secretKeyRejected };
+};
+
+const resolveSupabaseUrl = () => resolveSupabaseUrlWithDiagnostics().url;
+const resolveSupabaseKey = () => resolveSupabaseKeyWithDiagnostics().key;
 
 const crypto = require('crypto');
 const { GoogleGenAI } = require('@google/genai');
@@ -304,49 +353,65 @@ app.get(['/health/readiness', '/readyz'], (req, res) => {
 // Client-Safe Public Configuration Endpoints
 // Exposes ONLY publishable/anon Supabase configuration, NEVER server secrets or Gemini keys
 app.get(['/api/config', '/config'], (req, res) => {
-  const url = resolveSupabaseUrl();
-  const key = resolveSupabaseKey();
+  const urlDiag = resolveSupabaseUrlWithDiagnostics();
+  const keyDiag = resolveSupabaseKeyWithDiagnostics();
   const devEmail = (process.env.DEVELOPER_EMAIL || 'developer@insightiq.ai').trim().toLowerCase();
   const adminEmails = (process.env.ADMIN_EMAILS || 'admin@insightiq.internal,admin@insightiq.ai,developer@insightiq.internal,developer@insightiq.ai')
     .split(',')
     .map(s => s.trim().toLowerCase())
     .filter(Boolean);
+
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
   res.json({
     success: true,
     config: {
-      VITE_SUPABASE_URL: url,
-      VITE_SUPABASE_PUBLISHABLE_KEY: key,
-      VITE_SUPABASE_ANON_KEY: key,
-      NEXT_PUBLIC_SUPABASE_URL: url,
-      NEXT_PUBLIC_SUPABASE_ANON_KEY: key,
-      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: key,
-      SUPABASE_URL: url,
-      SUPABASE_ANON_KEY: key,
+      VITE_SUPABASE_URL: urlDiag.url,
+      VITE_SUPABASE_PUBLISHABLE_KEY: keyDiag.key,
+      VITE_SUPABASE_ANON_KEY: keyDiag.key,
+      NEXT_PUBLIC_SUPABASE_URL: urlDiag.url,
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: keyDiag.key,
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: keyDiag.key,
+      SUPABASE_URL: urlDiag.url,
+      SUPABASE_ANON_KEY: keyDiag.key,
       DEVELOPER_EMAIL: devEmail,
       ADMIN_EMAILS: adminEmails
+    },
+    diagnostics: {
+      urlPresent: urlDiag.isConfigured,
+      urlSource: urlDiag.source,
+      keyPresent: keyDiag.isConfigured,
+      keySource: keyDiag.source,
+      secretKeyRejected: keyDiag.secretKeyRejected
     }
   });
 });
 
 app.get(['/api/config.js', '/config.js'], (req, res) => {
-  const url = resolveSupabaseUrl();
-  const key = resolveSupabaseKey();
+  const urlDiag = resolveSupabaseUrlWithDiagnostics();
+  const keyDiag = resolveSupabaseKeyWithDiagnostics();
   const devEmail = (process.env.DEVELOPER_EMAIL || 'developer@insightiq.ai').trim().toLowerCase();
   const adminEmails = (process.env.ADMIN_EMAILS || 'admin@insightiq.internal,admin@insightiq.ai,developer@insightiq.internal,developer@insightiq.ai')
     .split(',')
     .map(s => s.trim().toLowerCase())
     .filter(Boolean);
   const publicConfig = {
-    VITE_SUPABASE_URL: url,
-    VITE_SUPABASE_PUBLISHABLE_KEY: key,
-    VITE_SUPABASE_ANON_KEY: key,
-    NEXT_PUBLIC_SUPABASE_URL: url,
-    NEXT_PUBLIC_SUPABASE_ANON_KEY: key,
-    NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: key,
-    SUPABASE_URL: url,
-    SUPABASE_ANON_KEY: key,
+    VITE_SUPABASE_URL: urlDiag.url,
+    VITE_SUPABASE_PUBLISHABLE_KEY: keyDiag.key,
+    VITE_SUPABASE_ANON_KEY: keyDiag.key,
+    NEXT_PUBLIC_SUPABASE_URL: urlDiag.url,
+    NEXT_PUBLIC_SUPABASE_ANON_KEY: keyDiag.key,
+    NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: keyDiag.key,
+    SUPABASE_URL: urlDiag.url,
+    SUPABASE_ANON_KEY: keyDiag.key,
     DEVELOPER_EMAIL: devEmail,
-    ADMIN_EMAILS: adminEmails
+    ADMIN_EMAILS: adminEmails,
+    __DIAGNOSTICS__: {
+      urlPresent: urlDiag.isConfigured,
+      urlSource: urlDiag.source,
+      keyPresent: keyDiag.isConfigured,
+      keySource: keyDiag.source,
+      secretKeyRejected: keyDiag.secretKeyRejected
+    }
   };
   res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
   res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');

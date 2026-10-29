@@ -44,7 +44,7 @@ export function resolveSupabaseConfig(): { url: string; key: string } {
     getEnvVar('REACT_APP_SUPABASE_ANON_KEY') || CANONICAL_SUPABASE_PUBLISHABLE_KEY;
 
   // Guard against exposing service_role or secrets to the browser
-  const key = (rawKey.startsWith('sb_secret_') || rawKey.includes('service_role')) ? '' : rawKey;
+  const key = (rawKey.startsWith('sb_secret_') || rawKey.includes('service_role')) ? (CANONICAL_SUPABASE_PUBLISHABLE_KEY || '') : rawKey;
 
   return { url, key };
 }

@@ -1847,53 +1847,99 @@ window.CANONICAL_PROJECTS = CANONICAL_PROJECTS;
   const CANONICAL_SUPABASE_URL = 'https://qldrqdnjpohyuhqvirmc.supabase.co';
   const CANONICAL_SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_uPbLIWSlLfxv8NZbzN1Drw_YPTr21t1';
 
+  const cleanConfigValue = (val) => {
+    if (typeof val !== 'string') return '';
+    let s = val.trim();
+    if ((s.startsWith('"') && s.endsWith('"')) || (s.startsWith("'") && s.endsWith("'"))) {
+      s = s.slice(1, -1).trim();
+    }
+    if (s === 'undefined' || s === 'null') return '';
+    return s;
+  };
+
   const getSupabaseConfig = () => {
     const env = (typeof window !== 'undefined' && window.__ENV__) || {};
     const procEnv = (typeof process !== 'undefined' && process.env) || {};
 
-    // If window.__ENV__ explicitly specifies empty credentials, treat as unconfigured
-    if (typeof window !== 'undefined' && window.__ENV__ && window.__ENV__.VITE_SUPABASE_URL === '' && window.__ENV__.VITE_SUPABASE_PUBLISHABLE_KEY === '') {
-      return { url: '', key: '' };
+    // Explicit disable instruction (used ONLY in controlled unconfigured-state test suites)
+    if (typeof window !== 'undefined' && window.__ENV__ && window.__ENV__.DISABLE_SUPABASE_FALLBACK === true) {
+      return { url: '', key: '', urlSource: 'disabled', keySource: 'disabled', secretKeyRejected: false };
     }
-    const url = (
-      env.VITE_SUPABASE_URL ||
-      env.NEXT_PUBLIC_SUPABASE_URL ||
-      env.SUPABASE_URL ||
-      env.REACT_APP_SUPABASE_URL ||
-      procEnv.VITE_SUPABASE_URL ||
-      procEnv.NEXT_PUBLIC_SUPABASE_URL ||
-      procEnv.SUPABASE_URL ||
-      (typeof window !== 'undefined' && window.localStorage?.getItem('insightiq_supabase_url')) ||
-      CANONICAL_SUPABASE_URL
-    ).trim();
 
-    const rawKey = (
-      env.VITE_SUPABASE_PUBLISHABLE_KEY ||
-      env.VITE_SUPABASE_ANON_KEY ||
-      env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
-      env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
-      env.SUPABASE_PUBLISHABLE_KEY ||
-      env.SUPABASE_ANON_KEY ||
-      env.REACT_APP_SUPABASE_ANON_KEY ||
-      procEnv.VITE_SUPABASE_PUBLISHABLE_KEY ||
-      procEnv.VITE_SUPABASE_ANON_KEY ||
-      procEnv.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
-      procEnv.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
-      procEnv.SUPABASE_ANON_KEY ||
-      (typeof window !== 'undefined' && window.localStorage?.getItem('insightiq_supabase_key')) ||
-      CANONICAL_SUPABASE_PUBLISHABLE_KEY
-    ).trim();
+    let url = '';
+    let urlSource = 'none';
+    const urlCandidates = [
+      ['window.__ENV__.VITE_SUPABASE_URL', env.VITE_SUPABASE_URL],
+      ['window.__ENV__.NEXT_PUBLIC_SUPABASE_URL', env.NEXT_PUBLIC_SUPABASE_URL],
+      ['window.__ENV__.SUPABASE_URL', env.SUPABASE_URL],
+      ['window.__ENV__.REACT_APP_SUPABASE_URL', env.REACT_APP_SUPABASE_URL],
+      ['process.env.VITE_SUPABASE_URL', procEnv.VITE_SUPABASE_URL],
+      ['process.env.NEXT_PUBLIC_SUPABASE_URL', procEnv.NEXT_PUBLIC_SUPABASE_URL],
+      ['process.env.SUPABASE_URL', procEnv.SUPABASE_URL],
+      ['localStorage.insightiq_supabase_url', typeof window !== 'undefined' ? window.localStorage?.getItem('insightiq_supabase_url') : '']
+    ];
 
-    // Guard against exposing service_role or backend secrets to browser
-    const key = (rawKey.startsWith('sb_secret_') || rawKey.includes('service_role')) ? '' : rawKey;
+    for (const [source, val] of urlCandidates) {
+      const cleaned = cleanConfigValue(val);
+      if (cleaned.startsWith('https://') || cleaned.startsWith('http://')) {
+        url = cleaned;
+        urlSource = source;
+        break;
+      }
+    }
 
-    return { url, key };
+    if (!url && CANONICAL_SUPABASE_URL) {
+      url = CANONICAL_SUPABASE_URL;
+      urlSource = 'canonical_fallback';
+    }
+
+    let rawKey = '';
+    let keySource = 'none';
+    let secretKeyRejected = false;
+    const keyCandidates = [
+      ['window.__ENV__.VITE_SUPABASE_PUBLISHABLE_KEY', env.VITE_SUPABASE_PUBLISHABLE_KEY],
+      ['window.__ENV__.VITE_SUPABASE_ANON_KEY', env.VITE_SUPABASE_ANON_KEY],
+      ['window.__ENV__.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY', env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY],
+      ['window.__ENV__.NEXT_PUBLIC_SUPABASE_ANON_KEY', env.NEXT_PUBLIC_SUPABASE_ANON_KEY],
+      ['window.__ENV__.SUPABASE_PUBLISHABLE_KEY', env.SUPABASE_PUBLISHABLE_KEY],
+      ['window.__ENV__.SUPABASE_ANON_KEY', env.SUPABASE_ANON_KEY],
+      ['window.__ENV__.REACT_APP_SUPABASE_ANON_KEY', env.REACT_APP_SUPABASE_ANON_KEY],
+      ['process.env.VITE_SUPABASE_PUBLISHABLE_KEY', procEnv.VITE_SUPABASE_PUBLISHABLE_KEY],
+      ['process.env.VITE_SUPABASE_ANON_KEY', procEnv.VITE_SUPABASE_ANON_KEY],
+      ['process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY', procEnv.NEXT_PUBLIC_SUPABASE_ANON_KEY],
+      ['process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY', procEnv.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY],
+      ['process.env.SUPABASE_ANON_KEY', procEnv.SUPABASE_ANON_KEY],
+      ['localStorage.insightiq_supabase_key', typeof window !== 'undefined' ? window.localStorage?.getItem('insightiq_supabase_key') : '']
+    ];
+
+    for (const [source, val] of keyCandidates) {
+      const cleaned = cleanConfigValue(val);
+      if (!cleaned) continue;
+      if (cleaned.startsWith('sb_secret_') || cleaned.includes('service_role')) {
+        console.error('[Security Violation] Secret or service_role key detected in ' + source + '. Refusing to expose to frontend.');
+        secretKeyRejected = true;
+        continue;
+      }
+      if (cleaned.length > 20) {
+        rawKey = cleaned;
+        keySource = source;
+        break;
+      }
+    }
+
+    let key = rawKey;
+    if (!key && CANONICAL_SUPABASE_PUBLISHABLE_KEY) {
+      key = CANONICAL_SUPABASE_PUBLISHABLE_KEY;
+      keySource = 'canonical_fallback';
+    }
+
+    return { url, key, urlSource, keySource, secretKeyRejected };
   };
 
-  const logSafeClientConfigCheck = (url, key) => {
-    const isUrlConfigured = Boolean(url && url.length > 5);
-    const isKeyConfigured = Boolean(key && key.length > 20);
-    console.log(`[InsightIQ AI] Safe Client Configuration Check: URL=${isUrlConfigured ? 'PRESENT' : 'MISSING'}, Key=${isKeyConfigured ? 'PRESENT' : 'MISSING'} (checked prefixes: VITE_*, NEXT_PUBLIC_*, SUPABASE_*)`);
+  const logSafeClientConfigCheck = (config) => {
+    const isUrlConfigured = Boolean(config.url && config.url.length > 5);
+    const isKeyConfigured = Boolean(config.key && config.key.length > 20);
+    console.log(`[InsightIQ AI] Safe Client Configuration Check: URL=${isUrlConfigured ? 'PRESENT' : 'MISSING'} (source: ${config.urlSource || 'unknown'}), Key=${isKeyConfigured ? 'PRESENT' : 'MISSING'} (source: ${config.keySource || 'unknown'}${config.secretKeyRejected ? ', secret_rejected: true' : ''}) (checked prefixes: VITE_*, NEXT_PUBLIC_*, SUPABASE_*)`);
     if (!isUrlConfigured || !isKeyConfigured) {
       console.warn('[InsightIQ AI] Supabase credentials are not fully configured. Please set Supabase URL and Publishable/Anon Key in .env.local.');
     }
@@ -1901,13 +1947,13 @@ window.CANONICAL_PROJECTS = CANONICAL_PROJECTS;
 
   const initSupabaseClient = () => {
     if (typeof window === 'undefined' || !window.supabase) return null;
-    const { url, key } = getSupabaseConfig();
-    logSafeClientConfigCheck(url, key);
-    if (!url || !key) return null;
+    const config = getSupabaseConfig();
+    logSafeClientConfigCheck(config);
+    if (!config.url || !config.key) return null;
     try {
-      return window.supabase.createClient(url, key, {
-        auth: {
-          persistSession: true,
+      return window.supabase.createClient(config.url, config.key, {
+        auth:
+          { persistSession: true,
           autoRefreshToken: true,
           detectSessionInUrl: true,
           storageKey: 'insightiq_supabase_auth_token'

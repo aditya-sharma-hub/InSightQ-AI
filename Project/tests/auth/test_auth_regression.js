@@ -413,7 +413,7 @@ async function runSuite() {
           interceptedReq.respond({
             status: 200,
             contentType: 'application/javascript',
-            body: 'window.__ENV__ = { VITE_SUPABASE_URL: "", VITE_SUPABASE_PUBLISHABLE_KEY: "" };'
+            body: 'window.__ENV__ = { VITE_SUPABASE_URL: "", VITE_SUPABASE_PUBLISHABLE_KEY: "", DISABLE_SUPABASE_FALLBACK: true };'
           });
         } else {
           interceptedReq.continue();
@@ -456,6 +456,49 @@ async function runSuite() {
       report('Browser E2E: Missing Configuration Actionable Error Display', true);
       await page.close();
     }
+
+    // --- Test 11b: Browser E2E: Resilient Recovery from Empty Runtime Configuration ---
+    console.log('\n[11b/13] Verifying Browser E2E: Resilient Fallback when Runtime Config is Empty...');
+    {
+      const page = await browser.newPage();
+      const consoleLogs = [];
+      page.on('console', msg => consoleLogs.push(msg.text()));
+
+      await page.setRequestInterception(true);
+      page.on('request', interceptedReq => {
+        if (interceptedReq.url().includes('/api/config.js')) {
+          interceptedReq.respond({
+            status: 200,
+            contentType: 'application/javascript',
+            body: 'window.__ENV__ = { VITE_SUPABASE_URL: "", VITE_SUPABASE_PUBLISHABLE_KEY: "", VITE_SUPABASE_ANON_KEY: "" };'
+          });
+        } else {
+          interceptedReq.continue();
+        }
+      });
+
+      await page.goto(`${testBaseUrl}/`, { waitUntil: 'networkidle2' });
+      await page.waitForSelector('input[type="email"]', { timeout: 8000 });
+
+      // Check client state
+      const state = await page.evaluate(() => {
+        const hasClient = typeof window.getSupabaseClient === 'function';
+        const clientInstance = hasClient ? Boolean(window.getSupabaseClient()) : false;
+        const bannerText = document.querySelector('.animate-fade-in[style*="border"]')?.textContent || '';
+        return { hasClient, clientInstance, bannerText };
+      });
+
+      assert.strictEqual(state.hasClient, true, 'window.getSupabaseClient must be defined');
+      assert.strictEqual(state.clientInstance, true, 'getSupabaseClient() must resolve a usable client via canonical fallback');
+      assert.ok(!state.bannerText.includes('Authentication service is not configured'), 'Must not display unconfigured warning when canonical fallback is active');
+
+      const configCheckLog = consoleLogs.find(l => l.includes('Safe Client Configuration Check'));
+      assert.ok(configCheckLog && configCheckLog.includes('URL=PRESENT') && configCheckLog.includes('Key=PRESENT'), 'Safe Client Configuration Check must show URL=PRESENT and Key=PRESENT');
+
+      report('Browser E2E: Resilient Fallback on Empty Runtime Config', true);
+      await page.close();
+    }
+
 
     // --- Test 12: Browser E2E: Session Restoration & Logout ---
     console.log('\n[12/12] Verifying Browser E2E: Session Restoration & Logout Purging...');
