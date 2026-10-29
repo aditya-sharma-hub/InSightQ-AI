@@ -9,7 +9,7 @@
 -- ----------------------------------------------------------------------------
 -- 1. REPAIR EXISTING TABLES SCHEMA INCONSISTENCIES
 -- ----------------------------------------------------------------------------
-ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS role TEXT DEFAULT 'data_analyst';
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS role TEXT DEFAULT 'Data Analyst';
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS role_configured BOOLEAN DEFAULT false;
 
 ALTER TABLE public.user_preferences ADD COLUMN IF NOT EXISTS email_notifications BOOLEAN DEFAULT true;
@@ -27,26 +27,47 @@ END $$;
 -- ----------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$
+DECLARE
+  selected_role TEXT;
+  clean_role TEXT;
 BEGIN
+  -- Extract and sanitize requested role from user metadata (strictly forbid self-assigning Administrator)
+  clean_role := lower(regexp_replace(trim(COALESCE(NEW.raw_user_meta_data->>'role', '')), '[\s_-]+', '_', 'g'));
+  IF clean_role IN ('data_scientist', 'scientist', 'ml_engineer', 'ai_engineer') THEN
+    selected_role := 'Data Scientist';
+  ELSIF clean_role IN ('project_manager', 'pm', 'product_manager', 'program_manager') THEN
+    selected_role := 'Project Manager';
+  ELSE
+    selected_role := 'Data Analyst';
+  END IF;
+
   -- 1. Create Profile Record
-  INSERT INTO public.profiles (id, email, full_name, avatar_url, provider)
+  INSERT INTO public.profiles (id, email, full_name, avatar_url, role, role_configured, provider)
   VALUES (
     NEW.id,
     NEW.email,
     COALESCE(NEW.raw_user_meta_data->>'full_name', NEW.raw_user_meta_data->>'name', split_part(NEW.email, '@', 1)),
     COALESCE(NEW.raw_user_meta_data->>'avatar_url', NEW.raw_user_meta_data->>'picture', NULL),
+    selected_role,
+    true,
     COALESCE(NEW.raw_app_meta_data->>'provider', 'email')
   )
   ON CONFLICT (id) DO UPDATE SET
     email = EXCLUDED.email,
     full_name = COALESCE(EXCLUDED.full_name, public.profiles.full_name),
     avatar_url = COALESCE(EXCLUDED.avatar_url, public.profiles.avatar_url),
+    role = COALESCE(public.profiles.role, EXCLUDED.role),
+    role_configured = COALESCE(public.profiles.role_configured, true),
     updated_at = NOW();
 
-  -- 2. Create User Preferences Record
-  INSERT INTO public.user_preferences (user_id, theme, language, timezone, currency, email_notifications)
-  VALUES (NEW.id, 'dark', 'en', 'Asia/Kolkata', 'INR', true)
-  ON CONFLICT (user_id) DO NOTHING;
+  -- 2. Create User Preferences Record safely (isolated)
+  BEGIN
+    INSERT INTO public.user_preferences (user_id, theme, language, timezone, currency, email_notifications)
+    VALUES (NEW.id, 'dark', 'en', 'Asia/Kolkata', 'INR', true)
+    ON CONFLICT (user_id) DO NOTHING;
+  EXCEPTION WHEN OTHERS THEN
+    RAISE NOTICE 'user_preferences logging skipped during signup: %', SQLERRM;
+  END;
 
   -- 3. Record Initial Activity Log safely (exception-protected)
   BEGIN

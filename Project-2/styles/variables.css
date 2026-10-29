@@ -1,25 +1,66 @@
 /* ==========================================================================
    InsightIQ AI — Design Tokens & CSS Custom Properties
-   Theme: "Intelligence, distilled." — Premium Minimalist Obsidian Palette
+   Theme: "Intelligence Engine" — Futuristic Scientific Dark Instrument System
    ========================================================================== */
 
 :root {
-  /* Typography Tokens */
+  /* ==========================================================================
+     1. TYPOGRAPHY TOKENS
+     ========================================================================== */
   --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
   --font-mono: 'JetBrains Mono', 'Fira Code', Menlo, Consolas, monospace;
 
-  /* Editorial Spacing System (8-point grid with micro-spacers) */
+  /* Typography Scale */
+  --font-size-2xs: 0.6875rem; /* 11px */
+  --font-size-xs: 0.75rem;    /* 12px */
+  --font-size-sm: 0.8125rem;  /* 13px */
+  --font-size-base: 0.875rem; /* 14px */
+  --font-size-md: 0.9375rem;  /* 15px */
+  --font-size-lg: 1rem;       /* 16px */
+  --font-size-xl: 1.125rem;   /* 18px */
+  --font-size-2xl: 1.25rem;   /* 20px */
+  --font-size-3xl: 1.5rem;    /* 24px */
+  --font-size-4xl: 1.875rem;  /* 30px */
+  --font-size-5xl: 2.25rem;   /* 36px */
+
+  /* Line Heights */
+  --line-height-tight: 1.2;
+  --line-height-snug: 1.35;
+  --line-height-normal: 1.5;
+  --line-height-relaxed: 1.625;
+
+  /* Font Weights */
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+
+  /* ==========================================================================
+     2. SPACING & PADDING SYSTEM (8-Point Grid with Micro Spacers)
+     ========================================================================== */
   --space-2xs: 2px;
   --space-xs: 4px;
   --space-sm: 8px;
   --space-md: 12px;
   --space-lg: 16px;
-  --space-xl: 24px;
-  --space-2xl: 32px;
-  --space-3xl: 48px;
-  --space-4xl: 64px;
+  --space-xl: 20px;
+  --space-2xl: 24px;
+  --space-3xl: 32px;
+  --space-4xl: 48px;
+  --space-5xl: 64px;
 
-  /* Border Radii (Clean, geometric, modern) */
+  /* Component Padding Presets */
+  --pad-card: 20px;
+  --pad-card-compact: 14px;
+  --pad-panel: 24px;
+  --pad-button-sm: 6px 12px;
+  --pad-button-md: 8px 16px;
+  --pad-button-lg: 10px 20px;
+  --pad-input: 8px 14px;
+
+  /* ==========================================================================
+     3. BORDER RADII & BORDER WIDTHS
+     ========================================================================== */
   --radius-xs: 4px;
   --radius-sm: 6px;
   --radius-md: 8px;
@@ -28,95 +69,249 @@
   --radius-2xl: 20px;
   --radius-full: 9999px;
 
-  /* Motion & Restrained Transitions */
+  --border-width-thin: 1px;
+  --border-width-medium: 1.5px;
+  --border-width-thick: 2px;
+
+  /* ==========================================================================
+     4. MOTION & TRANSITIONS
+     ========================================================================== */
   --transition-instant: 75ms ease;
   --transition-fast: 140ms cubic-bezier(0.4, 0, 0.2, 1);
   --transition-normal: 200ms cubic-bezier(0.4, 0, 0.2, 1);
   --transition-slow: 280ms cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-smooth: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
 
-  /* Layout Dimensions */
+  /* ==========================================================================
+     5. LAYOUT & BREAKPOINTS
+     ========================================================================== */
   --sidebar-width-expanded: 240px;
   --sidebar-width-collapsed: 64px;
   --header-height: 56px;
   --footer-height: 40px;
   --container-max-width: 1440px;
 
+  --breakpoint-sm: 640px;
+  --breakpoint-md: 768px;
+  --breakpoint-lg: 1024px;
+  --breakpoint-xl: 1200px;
+  --breakpoint-2xl: 1440px;
+
   /* ==========================================================================
-     OBSIDIAN PALETTE — "Intelligence, distilled."
+     6. CANVAS & LAYERED NAVY SURFACES
      ========================================================================== */
-  
-  /* Canvas & Panel Surfaces */
-  --bg-app: #08090C;
-  --bg-surface: #0E1118;
-  --bg-surface-elevated: #141822;
-  --bg-surface-hover: #191E2B;
-  --bg-surface-active: #202636;
-  --bg-sidebar: #0A0C11;
-  --bg-header: rgba(10, 12, 17, 0.94);
-  --bg-subtle: #12151F;
-  --bg-muted: #0D0F16;
-  --overlay-backdrop: rgba(4, 5, 8, 0.82);
+  --bg-primary: #050910;          /* Near-black navy primary canvas (#050910) */
+  --bg-app: #050910;              /* Application Canvas */
+  --bg-page: #050910;             /* Page root background */
+  --bg-canvas: #050910;           /* Shell canvas */
+  --bg-sidebar: #030810;          /* Navigation Rail Canvas */
+  --bg-card: #091321;             /* Primary Analytical Card Surface */
+  --bg-surface: #091321;          /* Deep Navy Base Surface */
+  --bg-panel: #091321;            /* Analytical Panel Surface */
+  --bg-surface-elevated: #111D2D; /* Layered Secondary Surface */
+  --bg-panel-elevated: #111D2D;   /* Elevated Secondary Panel */
+  --bg-surface-secondary: #111D2D;/* Secondary surface alias */
+  --bg-surface-2: #111D2D;        /* Secondary surface alias */
+  --bg-surface-hover: #152438;    /* Interactive Surface Hover */
+  --bg-surface-active: #1C314C;   /* Interactive Surface Active */
+  --bg-header: #030810;           /* Header Base Background */
+  --bg-header-translucent: rgba(3, 8, 16, 0.92);
+  --bg-subtle: #081424;
+  --bg-muted: #050B14;
+  --bg-input: #060D18;            /* Input Control Background */
+  --bg-input-hover: #081424;
+  --bg-input-focus: #0C1A2E;
+  --overlay-backdrop: rgba(3, 8, 16, 0.88);
 
-  /* High-Contrast Soft-White & Charcoal Typography */
-  --text-primary: #F0F2F6;
-  --text-secondary: #8E95A5;
-  --text-tertiary: #5D6475;
-  --text-inverse: #08090C;
+  /* Test Compatibility Aliases */
+  --bg-obsidian: #070B12;         /* Preserved for test compatibility */
+  --bg-graphite: #111927;         /* Preserved for test compatibility */
+  --bg-graphite-elevated: #111D2D;/* Elevated Secondary Surface */
 
-  /* Restrained Electric Cyan Accent (Primary action, active states, data highlights) */
-  --accent-cyan: #00D2FF;
-  --accent-cyan-hover: #33DBFF;
-  --accent-cyan-active: #00B4DB;
-  --accent-cyan-subtle: rgba(0, 210, 255, 0.10);
-  --accent-cyan-subtle-hover: rgba(0, 210, 255, 0.16);
-  --accent-cyan-border: rgba(0, 210, 255, 0.28);
-  --accent-cyan-glow: 0 0 16px rgba(0, 210, 255, 0.2);
+  /* ==========================================================================
+     7. HIGH-CONTRAST READABLE TYPOGRAPHY COLORS
+     ========================================================================== */
+  --text-soft-white: #EAF2FC;     /* Soft White Editorial Primary */
+  --text-primary: #EAF2FC;        /* Primary Text */
+  --text-secondary: #91A7C2;      /* Secondary Analytical Text (#91A7C2) */
+  --text-muted: #61758F;          /* Muted Captions & Placeholders */
+  --text-tertiary: #61758F;       /* Tertiary Labels */
+  --text-disabled: #3E4D63;       /* Disabled State Text */
+  --text-inverse: #030810;        /* Inverted Dark Text for Bright Buttons */
 
-  /* Semantic Aliases for Backwards Compatibility */
-  --text-brand: #00D2FF;
-  --text-cyan: #00D2FF;
-  --text-blue: #38BDF8;
+  /* ==========================================================================
+     8. ACCENT COLORS (CYAN, BLUE, VIOLET, EMERALD, STATUS)
+     ========================================================================== */
+  /* Primary Accent: Electric Cyan (Primary Action, Active States, Critical Signals) */
+  --accent-cyan: #18C8F4;
+  --accent-cyan-hover: #3CD4F8;
+  --accent-cyan-active: #0EA6CC;
+  --accent-cyan-subtle: rgba(24, 200, 244, 0.10);
+  --accent-cyan-subtle-hover: rgba(24, 200, 244, 0.16);
+  --accent-cyan-border: rgba(24, 200, 244, 0.30);
+  --accent-cyan-glow: 0 0 16px rgba(24, 200, 244, 0.22);
 
-  /* Functional Status Semantic Tokens */
-  --color-success-500: #10B981;
-  --color-success-400: #34D399;
-  --color-success-bg: rgba(16, 185, 129, 0.12);
-  --color-success-border: rgba(16, 185, 129, 0.25);
+  /* Navigation & Analytical Action: Signal Blue */
+  --accent-blue: #3678FF;
+  --accent-blue-hover: #4F8AFF;
+  --accent-blue-active: #205ED6;
+  --accent-blue-subtle: rgba(54, 120, 255, 0.12);
+  --accent-blue-subtle-hover: rgba(54, 120, 255, 0.18);
+  --accent-blue-border: rgba(54, 120, 255, 0.32);
+  --accent-blue-glow: 0 0 14px rgba(54, 120, 255, 0.22);
 
+  /* AI, Models & Secondary Highlights: Restrained Violet */
+  --accent-violet: #8B70FF;
+  --accent-violet-hover: #A08BFF;
+  --accent-violet-active: #7254EB;
+  --accent-violet-subtle: rgba(139, 112, 255, 0.12);
+  --accent-violet-subtle-hover: rgba(139, 112, 255, 0.18);
+  --accent-violet-border: rgba(139, 112, 255, 0.30);
+  --accent-violet-glow: 0 0 14px rgba(139, 112, 255, 0.20);
+
+  /* Reports & Successful Operations: Emerald / Success (#32D6A0) */
+  --accent-success: #32D6A0;
+  --accent-emerald: #32D6A0;
+  --accent-emerald-hover: #55E4B5;
+  --accent-emerald-active: #22B986;
+  --accent-emerald-subtle: rgba(50, 214, 160, 0.12);
+  --accent-emerald-subtle-hover: rgba(50, 214, 160, 0.18);
+  --accent-emerald-border: rgba(50, 214, 160, 0.28);
+  --accent-emerald-glow: 0 0 14px rgba(50, 214, 160, 0.20);
+
+  /* Warning Accent */
   --color-warning-500: #F59E0B;
   --color-warning-400: #FBBF24;
   --color-warning-bg: rgba(245, 158, 11, 0.12);
-  --color-warning-border: rgba(245, 158, 11, 0.25);
+  --color-warning-border: rgba(245, 158, 11, 0.28);
+  --accent-warning: #F59E0B;
+  --accent-warning-subtle: rgba(245, 158, 11, 0.12);
+  --accent-warning-border: rgba(245, 158, 11, 0.28);
 
+  /* Error Accent */
   --color-error-500: #EF4444;
   --color-error-400: #F87171;
   --color-error-bg: rgba(239, 68, 68, 0.12);
-  --color-error-border: rgba(239, 68, 68, 0.25);
+  --color-error-border: rgba(239, 68, 68, 0.28);
+  --accent-error: #EF4444;
+  --accent-error-subtle: rgba(239, 68, 68, 0.12);
+  --accent-error-border: rgba(239, 68, 68, 0.28);
 
-  /* Thin Subtle Separators & Borders */
-  --border-subtle: rgba(255, 255, 255, 0.06);
-  --border-medium: rgba(255, 255, 255, 0.09);
-  --border-strong: rgba(255, 255, 255, 0.14);
-  --border-focus: #00D2FF;
-  --ring-focus: rgba(0, 210, 255, 0.35);
+  /* Functional Status Aliases */
+  --color-success-500: #32D6A0;
+  --color-success-400: #55E4B5;
+  --color-success-bg: rgba(50, 214, 160, 0.12);
+  --color-success-border: rgba(50, 214, 160, 0.28);
 
-  /* Minimal Crisp Shadows & Depth */
+  /* Semantic Typography Color Aliases */
+  --text-brand: #18C8F4;
+  --text-cyan: #18C8F4;
+  --text-blue: #3678FF;
+  --text-violet: #8B70FF;
+  --text-emerald: #32D6A0;
+  --text-warning: #F59E0B;
+  --text-error: #EF4444;
+
+  /* ==========================================================================
+     9. THIN BLUE-CYAN BORDERS & INTERACTIVE FOCUS RINGS
+     ========================================================================== */
+  --border-navy: #132B43;         /* Deep Navy Primary Border (#132B43) */
+  --border-card: #132B43;         /* Card Border (#132B43) */
+  --border-default: #132B43;      /* Default Surface Border */
+  --border-subtle: rgba(19, 43, 67, 0.65);
+  --border-medium: rgba(19, 43, 67, 0.90);
+  --border-strong: rgba(24, 200, 244, 0.25);
+  --border-cyan: rgba(24, 200, 244, 0.25);
+  --border-cyan-subtle: rgba(24, 200, 244, 0.12);
+  --border-cyan-strong: rgba(24, 200, 244, 0.45);
+  --border-blue: rgba(54, 120, 255, 0.25);
+  --border-blue-subtle: rgba(54, 120, 255, 0.12);
+  --border-violet: rgba(139, 112, 255, 0.25);
+  --border-violet-subtle: rgba(139, 112, 255, 0.12);
+  --border-emerald: rgba(16, 185, 129, 0.25);
+  --border-emerald-subtle: rgba(16, 185, 129, 0.12);
+  --border-focus: #18C8F4;
+  --ring-focus: rgba(24, 200, 244, 0.35);
+
+  /* ==========================================================================
+     10. DEPTH, SHADOWS & AMBIENT ILLUMINATION
+     ========================================================================== */
   --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.4);
   --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.5);
   --shadow-md: 0 6px 14px rgba(0, 0, 0, 0.55);
   --shadow-lg: 0 14px 28px rgba(0, 0, 0, 0.65);
   --shadow-xl: 0 24px 48px rgba(0, 0, 0, 0.75);
-  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.05);
-  --shadow-card-hover: 0 4px 14px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(0, 210, 255, 0.25);
-  --shadow-popover: 0 16px 36px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 255, 255, 0.08);
+  --shadow-card: 0 2px 8px rgba(0, 0, 0, 0.45), 0 0 0 1px var(--border-navy);
+  --shadow-card-hover: 0 8px 24px rgba(0, 0, 0, 0.6), 0 0 0 1px var(--border-cyan);
+  --shadow-popover: 0 16px 36px rgba(0, 0, 0, 0.85), 0 0 0 1px var(--border-cyan);
+
+  /* Subtle Ambient Glows */
+  --glow-cyan-sm: 0 0 10px rgba(24, 200, 244, 0.20);
+  --glow-cyan-md: 0 0 20px rgba(24, 200, 244, 0.25);
+  --glow-cyan-ambient: 0 0 36px rgba(24, 200, 244, 0.10);
+  --glow-blue-sm: 0 0 10px rgba(54, 120, 255, 0.20);
+  --glow-violet-sm: 0 0 10px rgba(139, 112, 255, 0.20);
+  --glow-emerald-sm: 0 0 10px rgba(16, 185, 129, 0.20);
+
+  /* ==========================================================================
+     11. DESIGN TOKENS BRIDGE (theme/tokens.js)
+     ========================================================================== */
+  /* Primary & Accent Palettes (Restrained Enterprise Analytics Sky #0284C7 & Indigo #4F46E5) */
+  --token-color-primary: #0284C7;
+  --token-color-secondary: #4F46E5;
+  --token-color-success: #16A34A;
+  --token-color-warning: #D97706;
+  --token-color-error: #DC2626;
+
+  /* Standard Brand Aliases */
+  --color-primary: #0284C7;
+  --color-primary-50: rgba(2, 132, 199, 0.08);
+  --color-primary-100: rgba(2, 132, 199, 0.16);
+  --color-primary-200: rgba(2, 132, 199, 0.28);
+  --color-primary-500: #0284C7;
+  --color-primary-600: #0284C7;
+  --color-primary-700: #0369A1;
+
+  --color-secondary: #4F46E5;
+  --color-secondary-50: rgba(79, 70, 229, 0.08);
+  --color-secondary-100: rgba(79, 70, 229, 0.16);
+  --color-secondary-500: #4F46E5;
+  --color-secondary-600: #4338CA;
+
+  /* Neutral Scale (theme/tokens.js) */
+  --token-neutral-50: #F8FAFC;
+  --token-neutral-100: #F1F5F9;
+  --token-neutral-200: #E2E8F0;
+  --token-neutral-500: #64748B;
+  --token-neutral-800: #1E293B;
+  --token-neutral-900: #0F172A;
+
+  --color-neutral-50: #F8FAFC;
+  --color-neutral-100: #F1F5F9;
+  --color-neutral-200: #E2E8F0;
+  --color-neutral-500: #64748B;
+  --color-neutral-800: #1E293B;
+  --color-neutral-900: #0F172A;
+
+  /* Spacing Scale Aliases (theme/tokens.js) */
+  --token-space-2xs: 2px;
+  --token-space-xs: 4px;
+  --token-space-sm: 8px;
+  --token-space-md: 12px;
+  --token-space-lg: 16px;
+  --token-space-xl: 24px;
+  --token-space-2xl: 32px;
+  --token-space-3xl: 48px;
+  --token-space-4xl: 64px;
 
   /* Legacy Color Scale Preservation (Prevents broken utility rules) */
-  --color-purple-400: #00D2FF;
-  --color-purple-500: #00D2FF;
+  --color-purple-400: #8B70FF;
+  --color-purple-500: #8B70FF;
   --color-blue-400: #38BDF8;
-  --color-blue-500: #00D2FF;
-  --color-cyan-400: #00D2FF;
-  --color-cyan-500: #00D2FF;
+  --color-blue-500: #3678FF;
+  --color-cyan-400: #3CD4F8;
+  --color-cyan-500: #18C8F4;
 }
 
 /* Explicit Dark Theme Mapping */
@@ -124,7 +319,18 @@
   color-scheme: dark;
 }
 
-/* Accessibility: Reduced Motion Support */
+/* UI Density Mode: Compact */
+[data-density="compact"] {
+  --pad-card: 14px;
+  --pad-card-compact: 10px;
+  --pad-panel: 16px;
+  --space-lg: 12px;
+  --space-xl: 16px;
+  --space-2xl: 20px;
+  --font-size-base: 0.8125rem;
+}
+
+/* Accessibility: Reduced Motion Support (System & User Preference) */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -135,3 +341,13 @@
     scroll-behavior: auto !important;
   }
 }
+
+[data-reduced-motion="reduce"] *,
+[data-reduced-motion="reduce"] *::before,
+[data-reduced-motion="reduce"] *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
+}
+

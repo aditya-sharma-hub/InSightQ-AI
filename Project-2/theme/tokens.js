@@ -43,3 +43,8 @@ export const colors = {
     900: '#0F172A',
   }
 };
+
+if (typeof window !== 'undefined') {
+  window.InsightIQTokens = { spacing, typography, colors };
+}
+

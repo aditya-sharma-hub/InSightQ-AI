@@ -5,7 +5,7 @@ export const RegisterForm = ({ onSwitchToLogin, onSubmitSuccess }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [role, setRole] = useState('Data Scientist');
+  const [role, setRole] = useState('Data Analyst');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
@@ -67,11 +67,9 @@ export const RegisterForm = ({ onSwitchToLogin, onSubmitSuccess }) => {
           onChange: (e) => setRole(e.target.value),
           className: 'input-field'
         },
-          React.createElement('option', { value: 'Student' }, 'Student'),
-          React.createElement('option', { value: 'Researcher' }, 'Researcher'),
-          React.createElement('option', { value: 'Business Analyst' }, 'Business Analyst'),
+          React.createElement('option', { value: 'Data Analyst' }, 'Data Analyst'),
           React.createElement('option', { value: 'Data Scientist' }, 'Data Scientist'),
-          React.createElement('option', { value: 'ML Engineer' }, 'ML Engineer')
+          React.createElement('option', { value: 'Project Manager' }, 'Project Manager')
         )
       ),
 

@@ -3,11 +3,10 @@
  */
 
 export type UserRole = 
-  | 'Student'
-  | 'Business Analyst'
+  | 'Data Analyst'
   | 'Data Scientist'
-  | 'ML Engineer'
-  | 'Researcher';
+  | 'Project Manager'
+  | 'Administrator';
 
 export type AuthProviderType = 'email' | 'google' | 'azure';
 

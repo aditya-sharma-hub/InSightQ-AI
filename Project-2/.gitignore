@@ -14,13 +14,17 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-# Test scratch & temporary caches
+# Test scratch, temporary caches & verification artifacts
 scratch/
 .cache/
 .parcel-cache/
 dist/
 build/
+*.png
+verification_screenshots/
+test_artifacts_multiselect/
 
 # OS metadata
 .DS_Store
 Thumbs.db
+

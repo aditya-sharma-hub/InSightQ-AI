@@ -1,6 +1,6 @@
 /* ==========================================================================
-   InsightIQ AI - Typography System & Global Reset
-   Display, Heading, Title, Subtitle, Body, Caption, Button Typography Tokens
+   InsightIQ AI — Typography System & Global Reset
+   Display, Headings, Subtitles, Body, Kicker, Captions, Mono & Accessible Focus
    ========================================================================== */
 
 *, *::before, *::after {
@@ -12,11 +12,11 @@
 html {
   font-family: var(--font-sans);
   font-size: 16px;
-  line-height: 1.5;
+  line-height: var(--line-height-normal);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
-  color-scheme: light dark;
+  color-scheme: dark;
 }
 
 body {
@@ -24,7 +24,8 @@ body {
   color: var(--text-primary);
   min-height: 100vh;
   overflow-x: hidden;
-  font-size: 15px;
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-regular);
 }
 
 button, input, textarea, select {
@@ -36,69 +37,143 @@ a {
   text-decoration: none;
 }
 
-/* Typography Scales */
-.font-display {
-  font-size: 2.25rem; /* 36px */
-  line-height: 2.75rem; /* 44px */
-  font-weight: 700;
-  letter-spacing: -0.025em;
-}
-
-.font-heading {
-  font-size: 1.75rem; /* 28px */
-  line-height: 2.25rem; /* 36px */
-  font-weight: 600;
-  letter-spacing: -0.02em;
-}
-
-.font-title {
-  font-size: 1.25rem; /* 20px */
-  line-height: 1.75rem; /* 28px */
-  font-weight: 600;
+/* --------------------------------------------------------------------------
+   Semantic Heading Defaults
+   -------------------------------------------------------------------------- */
+h1, h2, h3, h4, h5, h6 {
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-weight: var(--font-weight-semibold);
   letter-spacing: -0.015em;
 }
 
+h1 {
+  font-size: var(--font-size-3xl);
+  line-height: var(--line-height-tight);
+  letter-spacing: -0.02em;
+}
+
+h2 {
+  font-size: var(--font-size-xl);
+  line-height: var(--line-height-snug);
+  letter-spacing: -0.015em;
+}
+
+h3 {
+  font-size: var(--font-size-lg);
+  line-height: var(--line-height-snug);
+}
+
+h4 {
+  font-size: var(--font-size-base);
+  line-height: var(--line-height-normal);
+}
+
+p {
+  color: var(--text-secondary);
+  font-size: var(--font-size-base);
+  line-height: var(--line-height-normal);
+}
+
+/* --------------------------------------------------------------------------
+   Typography Scale Utility Classes
+   -------------------------------------------------------------------------- */
+.font-display {
+  font-size: var(--font-size-5xl); /* 36px */
+  line-height: 2.75rem;            /* 44px */
+  font-weight: var(--font-weight-bold);
+  letter-spacing: -0.025em;
+  color: var(--text-primary);
+}
+
+.font-heading {
+  font-size: var(--font-size-4xl); /* 28px */
+  line-height: 2.25rem;            /* 36px */
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+}
+
+.font-title {
+  font-size: var(--font-size-2xl); /* 20px */
+  line-height: 1.75rem;            /* 28px */
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: -0.015em;
+  color: var(--text-primary);
+}
+
 .font-subtitle {
-  font-size: 1rem; /* 16px */
-  line-height: 1.5rem; /* 24px */
-  font-weight: 500;
+  font-size: var(--font-size-lg);  /* 16px */
+  line-height: 1.5rem;             /* 24px */
+  font-weight: var(--font-weight-medium);
   letter-spacing: -0.01em;
+  color: var(--text-secondary);
 }
 
 .font-body {
-  font-size: 0.875rem; /* 14px */
-  line-height: 1.25rem; /* 20px */
-  font-weight: 400;
+  font-size: var(--font-size-base); /* 14px */
+  line-height: 1.25rem;             /* 20px */
+  font-weight: var(--font-weight-regular);
+  color: var(--text-secondary);
 }
 
 .font-caption {
-  font-size: 0.75rem; /* 12px */
-  line-height: 1rem; /* 16px */
-  font-weight: 400;
+  font-size: var(--font-size-xs);   /* 12px */
+  line-height: 1rem;                /* 16px */
+  font-weight: var(--font-weight-regular);
+  color: var(--text-muted);
+}
+
+.font-kicker {
+  font-size: var(--font-size-2xs);  /* 11px */
+  line-height: 0.875rem;            /* 14px */
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
 }
 
 .font-button {
-  font-size: 0.875rem; /* 14px */
+  font-size: var(--font-size-base); /* 14px */
   line-height: 1.25rem;
-  font-weight: 500;
+  font-weight: var(--font-weight-medium);
   letter-spacing: 0.01em;
 }
 
 .font-mono {
   font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
 }
 
-/* Accessible Focus Ring Utility */
+/* --------------------------------------------------------------------------
+   Text Color Utilities
+   -------------------------------------------------------------------------- */
+.text-primary   { color: var(--text-primary) !important; }
+.text-secondary { color: var(--text-secondary) !important; }
+.text-muted     { color: var(--text-muted) !important; }
+.text-tertiary  { color: var(--text-tertiary) !important; }
+.text-cyan      { color: var(--accent-cyan) !important; }
+.text-blue      { color: var(--accent-blue) !important; }
+.text-violet    { color: var(--accent-violet) !important; }
+.text-emerald   { color: var(--accent-emerald) !important; }
+.text-warning   { color: var(--accent-warning) !important; }
+.text-error     { color: var(--accent-error) !important; }
+
+/* --------------------------------------------------------------------------
+   Accessible Focus Ring Utility
+   -------------------------------------------------------------------------- */
 :focus-visible {
-  outline: 2px solid var(--border-focus);
-  outline-offset: 2px;
-  box-shadow: 0 0 0 3px var(--ring-focus);
+  outline: 2px solid var(--border-focus) !important;
+  outline-offset: 2px !important;
+  box-shadow: 0 0 0 3px var(--ring-focus) !important;
 }
 
-/* Scrollbar Customization */
+/* --------------------------------------------------------------------------
+   Scrollbar Customization (Subtle Navy & Cyan Hover)
+   -------------------------------------------------------------------------- */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
 }
 
 ::-webkit-scrollbar-track {
@@ -106,14 +181,12 @@ a {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--color-neutral-300);
+  background: rgba(255, 255, 255, 0.12);
   border-radius: var(--radius-full);
-}
-
-[data-theme="dark"] ::-webkit-scrollbar-thumb {
-  background: var(--color-neutral-200);
+  transition: background var(--transition-fast);
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--color-neutral-400);
+  background: rgba(24, 200, 244, 0.35);
 }
+

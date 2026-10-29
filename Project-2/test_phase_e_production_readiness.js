@@ -231,7 +231,7 @@ async function main() {
       const res = await makeRequest({
         path: '/api/ai/copilot',
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' }
+        headers: { 'Content-Type': 'application/json', 'x-forwarded-for': '198.51.100.99' }
       }, {
         message: 'Ping rate limiter test',
         datasetContext: {}
