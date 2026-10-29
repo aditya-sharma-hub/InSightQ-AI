@@ -3580,6 +3580,22 @@ app.use(express.static(__dirname, {
   index: false
 }));
 
+// Explicit Root Route for HTML entrypoint
+app.get('/', (req, res) => {
+  const candidates = [
+    path.join(__dirname, 'public', 'index.html'),
+    path.join(__dirname, 'index.html'),
+    path.join(process.cwd(), 'public', 'index.html'),
+    path.join(process.cwd(), 'index.html')
+  ];
+  for (const candidate of candidates) {
+    if (fs.existsSync(candidate)) {
+      return res.sendFile(candidate);
+    }
+  }
+  return res.status(200).send('<!DOCTYPE html><html><head><meta http-equiv="refresh" content="0; url=/index.html" /></head><body><script>window.location.href="/index.html";</script></body></html>');
+});
+
 // Single Page Application Fallback
 app.get('*', (req, res, next) => {
   const publicIndexPath = path.join(__dirname, 'public', 'index.html');
@@ -3714,12 +3730,14 @@ if (require.main === module) {
   });
 }
 
-module.exports = {
-  app,
-  startServer,
-  parsePort,
-  FALLBACK_DEFAULT_PORT,
-  MAX_FALLBACK_PORT_ATTEMPTS,
-  MIN_PORT,
-  MAX_PORT
-};
+// Export Express app directly as callable function for Vercel Serverless Runtime
+// while attaching all helper functions and properties for backwards compatibility
+module.exports = app;
+module.exports.app = app;
+module.exports.default = app;
+module.exports.startServer = startServer;
+module.exports.parsePort = parsePort;
+module.exports.FALLBACK_DEFAULT_PORT = FALLBACK_DEFAULT_PORT;
+module.exports.MAX_FALLBACK_PORT_ATTEMPTS = MAX_FALLBACK_PORT_ATTEMPTS;
+module.exports.MIN_PORT = MIN_PORT;
+module.exports.MAX_PORT = MAX_PORT;
