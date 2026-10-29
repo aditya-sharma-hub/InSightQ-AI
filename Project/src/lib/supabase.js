@@ -27,18 +27,21 @@ function getEnvVar(key) {
     }
     return '';
 }
+const CANONICAL_SUPABASE_URL = 'https://qldrqdnjpohyuhqvirmc.supabase.co';
+const CANONICAL_SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_uPbLIWSlLfxv8NZbzN1Drw_YPTr21t1';
+
 export function resolveSupabaseConfig() {
     const url = getEnvVar('VITE_SUPABASE_URL') ||
         getEnvVar('NEXT_PUBLIC_SUPABASE_URL') ||
         getEnvVar('SUPABASE_URL') ||
-        getEnvVar('REACT_APP_SUPABASE_URL');
+        getEnvVar('REACT_APP_SUPABASE_URL') || CANONICAL_SUPABASE_URL;
     const rawKey = getEnvVar('VITE_SUPABASE_PUBLISHABLE_KEY') ||
         getEnvVar('VITE_SUPABASE_ANON_KEY') ||
         getEnvVar('NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY') ||
         getEnvVar('NEXT_PUBLIC_SUPABASE_ANON_KEY') ||
         getEnvVar('SUPABASE_PUBLISHABLE_KEY') ||
         getEnvVar('SUPABASE_ANON_KEY') ||
-        getEnvVar('REACT_APP_SUPABASE_ANON_KEY');
+        getEnvVar('REACT_APP_SUPABASE_ANON_KEY') || CANONICAL_SUPABASE_PUBLISHABLE_KEY;
     // Guard against exposing service_role or secrets to the browser
     const key = (rawKey.startsWith('sb_secret_') || rawKey.includes('service_role')) ? '' : rawKey;
     return { url, key };

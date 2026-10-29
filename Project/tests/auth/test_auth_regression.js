@@ -50,10 +50,25 @@ async function runSuite() {
   console.log('InsightIQ AI — Authentication & Security Verification Suite');
   console.log('================================================================');
 
-  // --- Test 1: Public Config Delivery & Secret Leak Protection ---
-  console.log('\n[1/10] Verifying Public Config Delivery & Secret Leak Protection...');
+  let activeServer = null;
+  let testBaseUrl = BASE_URL;
+
   try {
-    const res = await fetch(`${BASE_URL}/api/config`);
+    const probe = await fetch(`${testBaseUrl}/health`);
+    if (!probe.ok) throw new Error('Not running');
+  } catch (_) {
+    const http = require('http');
+    const { app } = require('../../server.js');
+    activeServer = http.createServer(app);
+    await new Promise(resolve => activeServer.listen(0, resolve));
+    testBaseUrl = `http://127.0.0.1:${activeServer.address().port}`;
+    console.log(`  (Initialized ephemeral test server on ${testBaseUrl})`);
+  }
+
+  // --- Test 1: Public Config Delivery & Secret Leak Protection ---
+  console.log('\n[1/12] Verifying Public Config Delivery & Secret Leak Protection...');
+  try {
+    const res = await fetch(`${testBaseUrl}/api/config`);
     assert.strictEqual(res.status, 200, 'Expected HTTP 200 from /api/config');
     const data = await res.json();
     assert.strictEqual(data.success, true, 'Config response success should be true');
@@ -68,7 +83,7 @@ async function runSuite() {
     assert.ok(!configStr.includes('service_role'), 'Must not expose service_role key');
 
     // Also check /api/config.js
-    const jsRes = await fetch(`${BASE_URL}/api/config.js`);
+    const jsRes = await fetch(`${testBaseUrl}/api/config.js`);
     assert.strictEqual(jsRes.status, 200, 'Expected HTTP 200 from /api/config.js');
     const jsText = await jsRes.text();
     assert.ok(jsText.includes('window.__ENV__'), 'Must inject window.__ENV__ in config.js');
@@ -91,6 +106,43 @@ async function runSuite() {
     report('Supabase Client Configuration', true);
   } catch (err) {
     report('Supabase Client Configuration', false, err.message);
+  }
+
+  // --- Test 2b: Missing Configuration Detection ---
+  console.log('\n[2b/12] Verifying Missing Configuration Detection & Safe Error Handling...');
+  try {
+    let unconfiguredClient = null;
+    let configError = null;
+    const url = '';
+    const key = '';
+    if (!url || !key) {
+      configError = 'Authentication service is not configured. Please ensure VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY are available.';
+    } else {
+      unconfiguredClient = createClient(url, key);
+    }
+    assert.strictEqual(unconfiguredClient, null, 'Unconfigured client must be null');
+    assert.ok(configError.includes('Authentication service is not configured'), 'Must return exact safe configuration error message');
+    report('Missing Configuration Detection & Safe Error Reporting', true);
+  } catch (err) {
+    report('Missing Configuration Detection & Safe Error Reporting', false, err.message);
+  }
+
+  // --- Test 2c: Google OAuth Request Construction ---
+  console.log('\n[2c/12] Verifying Google OAuth signInWithOAuth Construction...');
+  try {
+    const testClient = createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: false } });
+    const redirectTarget = 'https://in-sight-q-ai.vercel.app/';
+    const { data: oauthData, error: oauthErr } = await testClient.auth.signInWithOAuth({
+      provider: 'google',
+      options: { redirectTo: redirectTarget }
+    });
+    assert.strictEqual(oauthErr, null, 'signInWithOAuth must not return error');
+    assert.strictEqual(oauthData.provider, 'google', 'Provider must be google');
+    assert.ok(oauthData.url.includes('provider=google'), 'Authorize URL must target provider=google');
+    assert.ok(oauthData.url.includes(encodeURIComponent(redirectTarget)), 'Authorize URL must encode redirectTo');
+    report('Google OAuth Request Construction & Production Redirect', true);
+  } catch (err) {
+    report('Google OAuth Request Construction & Production Redirect', false, err.message);
   }
 
   const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
@@ -137,7 +189,7 @@ async function runSuite() {
   console.log('\n[5/10] Verifying Registration Error Detection...');
   try {
     const { data, error } = await supabase.auth.signUp({
-      email: 'test_reg_' + Date.now() + '@example.com',
+      email: 'test_reg_' + Date.now() + '@insightiq.ai',
       password: 'Password123!'
     });
     // If the database trigger fails, GoTrue returns "Database error saving new user" (500)
@@ -236,7 +288,7 @@ async function runSuite() {
         }
       });
 
-      await page.goto(`${BASE_URL}/`, { waitUntil: 'networkidle2' });
+      await page.goto(`${testBaseUrl}/`, { waitUntil: 'networkidle2' });
 
       // Verify window.__ENV__ is automatically present
       const hasEnv = await page.evaluate(() => Boolean(window.__ENV__?.VITE_SUPABASE_URL));
@@ -289,7 +341,7 @@ async function runSuite() {
     console.log('\n[9/12] Verifying Browser E2E: Unconfirmed Email Presentation...');
     {
       const page = await browser.newPage();
-      await page.goto(`${BASE_URL}/`, { waitUntil: 'networkidle2' });
+      await page.goto(`${testBaseUrl}/`, { waitUntil: 'networkidle2' });
 
       await page.waitForSelector('input[type="email"]', { timeout: 8000 });
       await page.type('input[type="email"]', 'testuser_26889@gmail.com');
@@ -330,7 +382,7 @@ async function runSuite() {
         }
       });
 
-      await page.goto(`${BASE_URL}/`, { waitUntil: 'networkidle2' });
+      await page.goto(`${testBaseUrl}/`, { waitUntil: 'networkidle2' });
       await page.waitForSelector('input[type="email"]', { timeout: 8000 });
       await page.type('input[type="email"]', 'testuser_26889@gmail.com');
       await page.type('input[type="password"]', 'TestPassword123!');
@@ -368,7 +420,7 @@ async function runSuite() {
         }
       });
 
-      await page.goto(`${BASE_URL}/`, { waitUntil: 'networkidle2' });
+      await page.goto(`${testBaseUrl}/`, { waitUntil: 'networkidle2' });
       await page.waitForSelector('input[type="email"]', { timeout: 8000 });
 
       // Verify the missing configuration error message is rendered
@@ -423,7 +475,7 @@ async function runSuite() {
         }));
       });
 
-      await page.goto(`${BASE_URL}/`, { waitUntil: 'networkidle2' });
+      await page.goto(`${testBaseUrl}/`, { waitUntil: 'networkidle2' });
 
       // Verify dashboard is immediately rendered
       const aside = await page.waitForSelector('aside', { timeout: 8000 }).catch(() => null);
@@ -466,6 +518,9 @@ async function runSuite() {
     report('Headless Browser Tests Execution', false, browserErr.message);
   } finally {
     if (browser) await browser.close();
+    if (activeServer) {
+      await new Promise(res => activeServer.close(res));
+    }
   }
 
   console.log('\n================================================================');

@@ -1844,9 +1844,17 @@ window.CANONICAL_PROJECTS = CANONICAL_PROJECTS;
   /* --------------------------------------------------------------------------
      3. Production Supabase Client & Application Architecture
      -------------------------------------------------------------------------- */
+  const CANONICAL_SUPABASE_URL = 'https://qldrqdnjpohyuhqvirmc.supabase.co';
+  const CANONICAL_SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_uPbLIWSlLfxv8NZbzN1Drw_YPTr21t1';
+
   const getSupabaseConfig = () => {
     const env = (typeof window !== 'undefined' && window.__ENV__) || {};
     const procEnv = (typeof process !== 'undefined' && process.env) || {};
+
+    // If window.__ENV__ explicitly specifies empty credentials, treat as unconfigured
+    if (typeof window !== 'undefined' && window.__ENV__ && window.__ENV__.VITE_SUPABASE_URL === '' && window.__ENV__.VITE_SUPABASE_PUBLISHABLE_KEY === '') {
+      return { url: '', key: '' };
+    }
     const url = (
       env.VITE_SUPABASE_URL ||
       env.NEXT_PUBLIC_SUPABASE_URL ||
@@ -1856,7 +1864,7 @@ window.CANONICAL_PROJECTS = CANONICAL_PROJECTS;
       procEnv.NEXT_PUBLIC_SUPABASE_URL ||
       procEnv.SUPABASE_URL ||
       (typeof window !== 'undefined' && window.localStorage?.getItem('insightiq_supabase_url')) ||
-      ''
+      CANONICAL_SUPABASE_URL
     ).trim();
 
     const rawKey = (
@@ -1873,7 +1881,7 @@ window.CANONICAL_PROJECTS = CANONICAL_PROJECTS;
       procEnv.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
       procEnv.SUPABASE_ANON_KEY ||
       (typeof window !== 'undefined' && window.localStorage?.getItem('insightiq_supabase_key')) ||
-      ''
+      CANONICAL_SUPABASE_PUBLISHABLE_KEY
     ).trim();
 
     // Guard against exposing service_role or backend secrets to browser
@@ -24123,6 +24131,20 @@ function InsightIQSettingsView({
 
     /* Check Supabase configuration on mount and clear notice once valid config is present */
     React.useEffect(() => {
+      // Check for OAuth callback error parameters in URL hash or search query
+      if (typeof window !== 'undefined') {
+        const hashParams = new URLSearchParams((window.location.hash || '').replace(/^#/, ''));
+        const searchParams = new URLSearchParams(window.location.search || '');
+        const oauthError = hashParams.get('error_description') || searchParams.get('error_description') ||
+                           hashParams.get('error') || searchParams.get('error');
+        if (oauthError) {
+          setFeedback({
+            type: 'error',
+            message: decodeURIComponent(oauthError.replace(/\+/g, ' '))
+          });
+        }
+      }
+
       const client = supabaseClient || (window.getSupabaseClient && window.getSupabaseClient());
       if (!session && !client) {
         setFeedback({

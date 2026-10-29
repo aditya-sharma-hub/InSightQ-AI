@@ -23,6 +23,10 @@ dotenv.config({ path: path.join(__dirname, '.env') });
 dotenv.config({ path: path.join(__dirname, '..', '.env.local') });
 dotenv.config({ path: path.join(__dirname, '..', '.env') });
 
+// Canonical Supabase Project Public Credentials (Used when environment variables are not set)
+const CANONICAL_SUPABASE_URL = 'https://qldrqdnjpohyuhqvirmc.supabase.co';
+const CANONICAL_SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_uPbLIWSlLfxv8NZbzN1Drw_YPTr21t1';
+
 // Canonical Supabase Environment Resolvers (Supports VITE_, NEXT_PUBLIC_, and standard SUPABASE_ prefixes)
 const resolveSupabaseUrl = () => {
   return (
@@ -30,7 +34,7 @@ const resolveSupabaseUrl = () => {
     process.env.NEXT_PUBLIC_SUPABASE_URL ||
     process.env.SUPABASE_URL ||
     process.env.REACT_APP_SUPABASE_URL ||
-    ''
+    CANONICAL_SUPABASE_URL
   ).trim();
 };
 
@@ -43,7 +47,7 @@ const resolveSupabaseKey = () => {
     process.env.SUPABASE_PUBLISHABLE_KEY ||
     process.env.SUPABASE_ANON_KEY ||
     process.env.REACT_APP_SUPABASE_ANON_KEY ||
-    ''
+    CANONICAL_SUPABASE_PUBLISHABLE_KEY
   ).trim();
 
   // Guard against exposing service_role or backend secrets to browser

@@ -32,7 +32,7 @@ export function resolveSupabaseConfig(): { url: string; key: string } {
     getEnvVar('VITE_SUPABASE_URL') ||
     getEnvVar('NEXT_PUBLIC_SUPABASE_URL') ||
     getEnvVar('SUPABASE_URL') ||
-    getEnvVar('REACT_APP_SUPABASE_URL');
+    getEnvVar('REACT_APP_SUPABASE_URL') || CANONICAL_SUPABASE_URL;
 
   const rawKey =
     getEnvVar('VITE_SUPABASE_PUBLISHABLE_KEY') ||
@@ -41,7 +41,7 @@ export function resolveSupabaseConfig(): { url: string; key: string } {
     getEnvVar('NEXT_PUBLIC_SUPABASE_ANON_KEY') ||
     getEnvVar('SUPABASE_PUBLISHABLE_KEY') ||
     getEnvVar('SUPABASE_ANON_KEY') ||
-    getEnvVar('REACT_APP_SUPABASE_ANON_KEY');
+    getEnvVar('REACT_APP_SUPABASE_ANON_KEY') || CANONICAL_SUPABASE_PUBLISHABLE_KEY;
 
   // Guard against exposing service_role or secrets to the browser
   const key = (rawKey.startsWith('sb_secret_') || rawKey.includes('service_role')) ? '' : rawKey;
