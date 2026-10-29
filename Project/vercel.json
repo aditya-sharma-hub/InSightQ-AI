@@ -30,7 +30,7 @@
       "destination": "/api/index.js"
     },
     {
-      "source": "/((?!api/|health|config|livez|readyz|index\\.html).*)",
+      "source": "/((?!api/|health|config|livez|readyz|index\\.html)[^.]*)",
       "destination": "/index.html"
     }
   ]
