@@ -93,6 +93,60 @@ async function runSuite() {
     report('Public Config Delivery & Secret Leak Prevention', false, err.message);
   }
 
+  // --- Test 1b: Serverless Config Fallback Guarantee (Empty/Whitespace/Secret Env Regression Protection) ---
+  console.log('\n[1b/14] Verifying Serverless Config Non-Empty Fallback Protection...');
+  try {
+    const http = require('http');
+    const origViteUrl = process.env.VITE_SUPABASE_URL;
+    const origViteKey = process.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+    const origNextUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const origNextKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+    try {
+      process.env.VITE_SUPABASE_URL = '   ';
+      process.env.NEXT_PUBLIC_SUPABASE_URL = '';
+      process.env.SUPABASE_URL = '""';
+      process.env.VITE_SUPABASE_PUBLISHABLE_KEY = 'sb_secret_should_never_leak_99999999999';
+      process.env.VITE_SUPABASE_ANON_KEY = '';
+      process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY = '';
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = '';
+      process.env.SUPABASE_PUBLISHABLE_KEY = '';
+      process.env.SUPABASE_ANON_KEY = 'service_role_reject';
+
+      delete require.cache[require.resolve('../../server.js')];
+      const { app: testApp } = require('../../server.js');
+      const tempServer = http.createServer(testApp);
+      await new Promise(r => tempServer.listen(0, r));
+      const tempPort = tempServer.address().port;
+
+      const cRes = await fetch(`http://127.0.0.1:${tempPort}/api/config`);
+      const cData = await cRes.json();
+
+      assert.strictEqual(cRes.status, 200, 'Must return 200');
+      assert.ok(cData.config.VITE_SUPABASE_URL && cData.config.VITE_SUPABASE_URL.startsWith('https://'), 'VITE_SUPABASE_URL must never be empty or whitespace');
+      assert.ok(cData.config.VITE_SUPABASE_PUBLISHABLE_KEY && cData.config.VITE_SUPABASE_PUBLISHABLE_KEY.startsWith('sb_publishable_'), 'VITE_SUPABASE_PUBLISHABLE_KEY must never be empty or secret');
+      assert.strictEqual(cData.diagnostics.urlPresent, true, 'Diagnostics must confirm urlPresent');
+      assert.strictEqual(cData.diagnostics.keyPresent, true, 'Diagnostics must confirm keyPresent');
+      assert.strictEqual(cData.diagnostics.secretKeyRejected, true, 'Diagnostics must confirm secretKey was rejected');
+
+      const jsRes = await fetch(`http://127.0.0.1:${tempPort}/api/config.js`);
+      const jsText = await jsRes.text();
+      assert.ok(!jsText.includes('VITE_SUPABASE_URL":""'), 'config.js must never emit empty string for VITE_SUPABASE_URL');
+      assert.ok(!jsText.includes('VITE_SUPABASE_PUBLISHABLE_KEY":""'), 'config.js must never emit empty string for VITE_SUPABASE_PUBLISHABLE_KEY');
+
+      await new Promise(r => tempServer.close(r));
+      report('Serverless Config Fallback Guarantee (Empty/Whitespace/Secret Env)', true);
+    } finally {
+      process.env.VITE_SUPABASE_URL = origViteUrl;
+      process.env.VITE_SUPABASE_PUBLISHABLE_KEY = origViteKey;
+      process.env.NEXT_PUBLIC_SUPABASE_URL = origNextUrl;
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = origNextKey;
+      delete require.cache[require.resolve('../../server.js')];
+    }
+  } catch (err) {
+    report('Serverless Config Fallback Guarantee (Empty/Whitespace/Secret Env)', false, err.message);
+  }
+
   // --- Test 2: Supabase Client Initializer & Configuration ---
   console.log('\n[2/10] Verifying Supabase Client Initialization...');
   try {

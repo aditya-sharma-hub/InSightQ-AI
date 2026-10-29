@@ -27,8 +27,13 @@
   <!-- React 18 & Supabase UMD Runtimes (Works on file:// and http://) -->
   <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
-  <!-- Supabase Library -->
+  <!-- Supabase Library with Multi-CDN Resilient Fallback -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script>
+    if (!window.supabase) {
+      document.write('<script src="https://unpkg.com/@supabase/supabase-js@2"><\/script>');
+    }
+  </script>
   <!-- SheetJS XLSX Library for Client-Side Dataset Extraction -->
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <!-- jsPDF & jsPDF-AutoTable for Real Multi-Page Binary PDF Generation -->
@@ -55,14 +60,30 @@
     });
   </script>
 
-  <!-- Client Environment Configuration (Public Supabase Variables) -->
-  <script src="/api/config.js"></script>
+  <!-- Pre-seed Synchronous Public Configuration Fallbacks (Zero-Latency Guarantee) -->
+  <script>
+    window.__ENV__ = Object.assign({
+      VITE_SUPABASE_URL: "https://qldrqdnjpohyuhqvirmc.supabase.co",
+      VITE_SUPABASE_PUBLISHABLE_KEY: "sb_publishable_uPbLIWSlLfxv8NZbzN1Drw_YPTr21t1",
+      VITE_SUPABASE_ANON_KEY: "sb_publishable_uPbLIWSlLfxv8NZbzN1Drw_YPTr21t1",
+      NEXT_PUBLIC_SUPABASE_URL: "https://qldrqdnjpohyuhqvirmc.supabase.co",
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: "sb_publishable_uPbLIWSlLfxv8NZbzN1Drw_YPTr21t1",
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "sb_publishable_uPbLIWSlLfxv8NZbzN1Drw_YPTr21t1",
+      SUPABASE_URL: "https://qldrqdnjpohyuhqvirmc.supabase.co",
+      SUPABASE_ANON_KEY: "sb_publishable_uPbLIWSlLfxv8NZbzN1Drw_YPTr21t1",
+      DEVELOPER_EMAIL: "developer@insightiq.ai",
+      ADMIN_EMAILS: ["admin@insightiq.internal", "admin@insightiq.ai", "developer@insightiq.internal", "developer@insightiq.ai"]
+    }, window.__ENV__ || {});
+  </script>
+
+  <!-- Client Environment Configuration (Public Supabase Variables with Cache Busting) -->
+  <script src="/api/config.js?v=20261029"></script>
 
   <!-- Design Tokens Runtime Bridge -->
-  <script src="./theme/tokens.bridge.js"></script>
+  <script src="./theme/tokens.bridge.js?v=20261029"></script>
 
-  <!-- Standalone Application Script -->
-  <script src="./app.js"></script>
+  <!-- Standalone Application Script (Cache Busted to Force Instant Client Update) -->
+  <script src="./app.js?v=20261029"></script>
 </body>
 </html>
 
