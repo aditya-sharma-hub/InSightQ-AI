@@ -17,7 +17,3 @@ build/
 Thumbs.db
 *.zip
 zip datasets/
-*.png
-verification_screenshots/
-test_artifacts_multiselect/
-

@@ -1,0 +1,41 @@
+{
+  "name": "insightiq-ai",
+  "version": "1.0.0",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node tests/engine/test_phase_e_production_readiness.js",
+    "test:all": "node tests/engine/test_phase_a_tabular.js && node tests/engine/test_phase_b_unstructured.js && node tests/engine/test_phase_c_statistical_engine.js && node tests/engine/test_phase_d_unified_intelligence.js && node tests/engine/test_phase_e_production_readiness.js && node tests/engine/test_universal_data_engine.js && node tests/ui/test_regression_workspace_init.js && node tests/ui/test_port_fallback.js",
+    "test:phase-a": "node tests/engine/test_phase_a_tabular.js",
+    "test:phase-b": "node tests/engine/test_phase_b_unstructured.js",
+    "test:phase-c": "node tests/engine/test_phase_c_statistical_engine.js",
+    "test:phase-d": "node tests/engine/test_phase_d_unified_intelligence.js",
+    "test:phase-e": "node tests/engine/test_phase_e_production_readiness.js",
+    "test:init": "node tests/ui/test_regression_workspace_init.js",
+    "test:ml": "node tests/engine/test_ml_real_training.js",
+    "test:auth": "node tests/auth/test_auth_regression.js",
+    "test:clean": "node tests/ui/test_clean_workspace.js",
+    "test:port": "node tests/ui/test_port_fallback.js",
+    "lint": "node -c server.js && node -c engine/index.js && node -c engine/intelligence/index.js"
+  },
+  "dependencies": {
+    "@google/genai": "^2.17.1",
+    "@supabase/supabase-js": "^2.112.2",
+    "adm-zip": "^0.6.1",
+    "cors": "^2.8.6",
+    "dotenv": "^16.6.1",
+    "express": "^4.22.2",
+    "jspdf": "^4.2.1",
+    "jspdf-autotable": "^5.0.8",
+    "multer": "^2.4.0",
+    "pdf-parse": "^2.4.5",
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "acorn": "^8.18.0",
+    "d3-geo": "^3.1.1",
+    "puppeteer": "^25.5.0",
+    "topojson-client": "^3.1.0",
+    "typescript": "^7.0.2",
+    "world-atlas": "^2.0.2"
+  }
+}

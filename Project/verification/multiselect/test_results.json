@@ -1,0 +1,140 @@
+[
+  {
+    "id": "1.1-POPOVER",
+    "title": "Dataset Manager popover opens on button click",
+    "status": "PASS",
+    "detail": ""
+  },
+  {
+    "id": "1.2-COUNT",
+    "title": "Selection count indicator displays \"X of Y selected\"",
+    "status": "PASS",
+    "detail": "1 of 5 selected"
+  },
+  {
+    "id": "1.3-CHECKBOXES",
+    "title": "Rendered 5 dataset multi-select checkboxes",
+    "status": "PASS",
+    "detail": "Found: 5"
+  },
+  {
+    "id": "1.4-MULTISELECT",
+    "title": "Selection count updates dynamically upon selecting multiple datasets",
+    "status": "PASS",
+    "detail": "2 of 5 selected"
+  },
+  {
+    "id": "1.5-WORKBENCH",
+    "title": "Applying multi-selection reveals the Multi-Dataset Workflow Workbench",
+    "status": "PASS",
+    "detail": ""
+  },
+  {
+    "id": "1.6-WORKBENCH-TABS",
+    "title": "Multi-Dataset workbench contains Schema Comparison, Joins, and ML Studio tabs",
+    "status": "PASS",
+    "detail": ""
+  },
+  {
+    "id": "2.1-SEARCH",
+    "title": "Searching by name filters the dataset manager list",
+    "status": "PASS",
+    "detail": "Visible items: 2"
+  },
+  {
+    "id": "2.2-ID-BADGES",
+    "title": "Separate datasets sharing display name \"orders_q3\" display distinctive stable ID badges",
+    "status": "PASS",
+    "detail": "[\"#ds_orders_q3_alpha\",\"CSV\",\"● ACTIVE\",\"#ds_orders_q3_beta\",\"CSV\"]"
+  },
+  {
+    "id": "3.1-MODAL-OPEN",
+    "title": "Bulk delete confirmation modal opens with selected dataset list",
+    "status": "PASS",
+    "detail": ""
+  },
+  {
+    "id": "3.2-MODE-DETACH",
+    "title": "Can toggle \"Remove from project\" mode without permanent data deletion",
+    "status": "PASS",
+    "detail": ""
+  },
+  {
+    "id": "3.3-DETACH-CONFIRM-READY",
+    "title": "In detach mode, confirmation button is ready without typing \"DELETE\"",
+    "status": "PASS",
+    "detail": ""
+  },
+  {
+    "id": "3.4-DETACH-COMPLETED",
+    "title": "Detach completed successfully and modal closed",
+    "status": "PASS",
+    "detail": ""
+  },
+  {
+    "id": "4.1-DELETE-GUARD-DISABLED",
+    "title": "Permanent delete confirm button is initially disabled",
+    "status": "PASS",
+    "detail": ""
+  },
+  {
+    "id": "4.2-DELETE-GUARD-PARTIAL",
+    "title": "Button remains disabled for partial confirmation input \"DEL\"",
+    "status": "PASS",
+    "detail": ""
+  },
+  {
+    "id": "4.3-DELETE-GUARD-ENABLED",
+    "title": "Button unlocks upon typing exact \"DELETE\"",
+    "status": "PASS",
+    "detail": ""
+  },
+  {
+    "id": "4.4-PERMANENT-DELETED",
+    "title": "Target disposable dataset successfully and permanently deleted",
+    "status": "PASS",
+    "detail": "Remaining: [\"ds_orders_q3_alpha\",\"ds_orders_q3_beta\",\"ds_customers_crm\",\"ds_detach_test_item\"]"
+  },
+  {
+    "id": "5.1-CANCEL-MODAL-CLOSE",
+    "title": "Cancel button closes the bulk delete modal",
+    "status": "PASS",
+    "detail": ""
+  },
+  {
+    "id": "5.2-CANCEL-DATA-INTACT",
+    "title": "Cancelled dataset remains intact in dataset manager",
+    "status": "PASS",
+    "detail": ""
+  },
+  {
+    "id": "6.1-PERSISTENCE-AFTER-REFRESH",
+    "title": "Deleted datasets remain deleted and surviving datasets persist after reload",
+    "status": "PASS",
+    "detail": "Present IDs: [\"ds_orders_q3_alpha\",\"ds_orders_q3_beta\",\"ds_customers_crm\",\"ds_detach_test_item\"]"
+  },
+  {
+    "id": "7.1-UNAUTHORIZED-SERVER-REJECTION",
+    "title": "Unauthorized dataset deletion attempt rejected with 401/403 or DATASET_ACCESS_DENIED",
+    "status": "PASS",
+    "detail": "{\"status\":401,\"data\":{\"success\":false,\"code\":\"TOKEN_INVALID\",\"error\":\"Invalid or expired session token.\"}}"
+  },
+  {
+    "id": "8.1-SINGLE-ACTIVE-LABEL",
+    "title": "Dataset manager button updates to reflect active dataset",
+    "status": "PASS",
+    "detail": "orders_q3▾"
+  },
+  {
+    "id": "8.2-OVERVIEW-KPIS",
+    "title": "Overview metric/KPI cards render for the active dataset",
+    "status": "PASS",
+    "detail": ""
+  },
+  {
+    "id": "8.3-SCHEMA-TABLE",
+    "title": "Dataset columns & schema table render properly in overview",
+    "status": "PASS",
+    "detail": ""
+  }
+]
