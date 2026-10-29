@@ -9,11 +9,14 @@
 --      designated account 'adityasharmand@gmail.com' while setting workspace_persona
 --      to 'Data Analyst' without client-side spoofing or unverified metadata.
 --   3. Hardens server-side anti-escalation trigger tr_enforce_profile_role_security
---      to prevent accidental demotion when administrators switch workspace views.
+--      with explicit search_path and prevents accidental demotion when administrators
+--      switch workspace views.
 --   4. Updates atomic workspace role switching RPC function to preserve
 --      'Administrator' authorization role while updating 'workspace_persona'.
 --   5. Logs the explicit recovery and separation in public.user_activity.
 -- ============================================================================
+
+BEGIN;
 
 -- ----------------------------------------------------------------------------
 -- 1. Ensure 'workspace_persona' column exists on public.profiles
@@ -66,7 +69,13 @@ BEGIN
     SET
       role = 'Administrator',
       role_configured = true,
-      workspace_persona = COALESCE(v_existing_profile.workspace_persona, 'Data Analyst'),
+      workspace_persona = COALESCE(
+        v_existing_profile.workspace_persona,
+        CASE
+          WHEN v_existing_profile.role IN ('Data Analyst', 'Data Scientist', 'Project Manager') THEN v_existing_profile.role
+          ELSE 'Data Analyst'
+        END
+      ),
       updated_at = NOW()
     WHERE id = v_user.id;
   ELSE
@@ -108,6 +117,9 @@ BEGIN
     USING
       v_user.id,
       'Administrator Access Restored & Workspace Persona Separated (adityasharmand@gmail.com)';
+  ELSE
+    RAISE EXCEPTION 'Audit logging table public.user_activity does not have required action or activity column.'
+      USING ERRCODE = '42703';
   END IF;
 
   RAISE NOTICE 'SUCCESS: Account "%" (ID: %) restored with role "Administrator" and workspace persona "Data Analyst".', v_target_email, v_user.id;
@@ -117,10 +129,15 @@ END $$;
 -- 3. Hardened Trigger: Prevent Accidental Demotion & Enforce Anti-Escalation
 -- ----------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION public.enforce_profile_role_security()
-RETURNS TRIGGER AS $$
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
 DECLARE
   calling_uid UUID;
   normalized_new_role TEXT;
+  normalized_persona TEXT;
 BEGIN
   calling_uid := auth.uid();
   normalized_new_role := lower(regexp_replace(trim(COALESCE(NEW.role, '')), '[\s_-]+', '_', 'g'));
@@ -144,7 +161,7 @@ BEGIN
 
   -- ACCIDENTAL DEMOTION PREVENTION:
   -- If user is already an Administrator, retain 'Administrator' authorization role
-  -- and redirect the requested workspace view into workspace_persona.
+  -- and redirect any requested workspace view change into workspace_persona.
   IF TG_OP = 'UPDATE' AND (OLD.role = 'Administrator' OR OLD.role = 'admin') THEN
     IF NEW.role != 'Administrator' THEN
       NEW.workspace_persona := NEW.role;
@@ -168,23 +185,65 @@ BEGIN
     END IF;
   END IF;
 
+  -- Synchronize workspace_persona:
+  -- 1. If workspace_persona was explicitly provided, canonicalize it (only Data Analyst, Data Scientist, Project Manager are permitted)
+  IF NEW.workspace_persona IS NOT NULL THEN
+    normalized_persona := lower(regexp_replace(trim(NEW.workspace_persona), '[\s_-]+', '_', 'g'));
+    IF normalized_persona IN ('data_analyst', 'analyst', 'business_analyst', 'student', 'researcher') THEN
+      NEW.workspace_persona := 'Data Analyst';
+    ELSIF normalized_persona IN ('data_scientist', 'scientist', 'ml_engineer', 'ai_engineer') THEN
+      NEW.workspace_persona := 'Data Scientist';
+    ELSIF normalized_persona IN ('project_manager', 'pm', 'product_manager', 'program_manager') THEN
+      NEW.workspace_persona := 'Project Manager';
+    ELSE
+      -- Disallow assigning 'Administrator' as a workspace persona; fallback to safe lens
+      IF NEW.role != 'Administrator' THEN
+        NEW.workspace_persona := NEW.role;
+      ELSIF TG_OP = 'UPDATE' AND OLD.workspace_persona IS NOT NULL THEN
+        NEW.workspace_persona := OLD.workspace_persona;
+      ELSE
+        NEW.workspace_persona := 'Data Analyst';
+      END IF;
+    END IF;
+  ELSE
+    -- If workspace_persona is NULL, set it to NEW.role for ordinary users, or default to Data Analyst for admins
+    IF NEW.role != 'Administrator' THEN
+      NEW.workspace_persona := NEW.role;
+    ELSIF TG_OP = 'UPDATE' AND OLD.workspace_persona IS NOT NULL THEN
+      NEW.workspace_persona := OLD.workspace_persona;
+    ELSE
+      NEW.workspace_persona := 'Data Analyst';
+    END IF;
+  END IF;
+
+  -- For ordinary users whose role changed, keep workspace_persona synchronized
+  IF NEW.role != 'Administrator' AND TG_OP = 'UPDATE' AND NEW.role != OLD.role THEN
+    IF NEW.workspace_persona = OLD.workspace_persona OR NEW.workspace_persona IS NULL THEN
+      NEW.workspace_persona := NEW.role;
+    END IF;
+  END IF;
+
   NEW.role_configured := true;
   NEW.updated_at := NOW();
 
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$;
 
 DROP TRIGGER IF EXISTS tr_enforce_profile_role_security ON public.profiles;
 CREATE TRIGGER tr_enforce_profile_role_security
-  BEFORE INSERT OR UPDATE OF role ON public.profiles
+  BEFORE INSERT OR UPDATE OF role, workspace_persona ON public.profiles
   FOR EACH ROW EXECUTE FUNCTION public.enforce_profile_role_security();
 
 -- ----------------------------------------------------------------------------
 -- 4. Atomic Role & Persona Switching RPC
 -- ----------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION public.update_user_workspace_role(new_role TEXT)
-RETURNS JSONB AS $$
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
 DECLARE
   user_id UUID;
   clean_role TEXT;
@@ -201,7 +260,7 @@ BEGIN
   clean_role := trim(COALESCE(new_role, ''));
   normalized_role := lower(regexp_replace(clean_role, '[\s_-]+', '_', 'g'));
 
-  -- Validate allowlist of user-selectable roles
+  -- Validate allowlist of user-selectable roles (Administrator is NEVER selectable via RPC)
   IF normalized_role IN ('data_analyst', 'analyst', 'business_analyst', 'student', 'researcher') THEN
     target_role := 'Data Analyst';
   ELSIF normalized_role IN ('data_scientist', 'scientist', 'ml_engineer', 'ai_engineer') THEN
@@ -213,8 +272,12 @@ BEGIN
       USING ERRCODE = '22023';
   END IF;
 
-  -- Check current role of the user
+  -- Check current role of the calling user
   SELECT role INTO current_user_role FROM public.profiles WHERE id = user_id;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'User profile not found for id %', user_id USING ERRCODE = 'P0002';
+  END IF;
 
   -- If user is an Administrator, preserve Administrator authorization role and switch workspace_persona
   IF current_user_role = 'Administrator' OR current_user_role = 'admin' THEN
@@ -237,10 +300,6 @@ BEGIN
     RETURNING * INTO updated_record;
   END IF;
 
-  IF NOT FOUND THEN
-    RAISE EXCEPTION 'User profile not found for id %', user_id USING ERRCODE = 'P0002';
-  END IF;
-
   RETURN jsonb_build_object(
     'success', true,
     'user_id', updated_record.id,
@@ -250,5 +309,15 @@ BEGIN
     'updated_at', updated_record.updated_at
   );
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$;
 
+-- Explicit Function Permissions
+REVOKE ALL ON FUNCTION public.update_user_workspace_role(TEXT) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.update_user_workspace_role(TEXT) FROM anon;
+GRANT EXECUTE ON FUNCTION public.update_user_workspace_role(TEXT) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.update_user_workspace_role(TEXT) TO service_role;
+
+REVOKE ALL ON FUNCTION public.enforce_profile_role_security() FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.enforce_profile_role_security() TO postgres, authenticated, service_role;
+
+COMMIT;
