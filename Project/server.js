@@ -3581,11 +3581,39 @@ app.use(express.static(__dirname, {
 }));
 
 // Single Page Application Fallback
-app.get('*', (req, res) => {
+app.get('*', (req, res, next) => {
   const publicIndexPath = path.join(__dirname, 'public', 'index.html');
   const rootIndexPath = path.join(__dirname, 'index.html');
-  const targetIndex = fs.existsSync(publicIndexPath) ? publicIndexPath : rootIndexPath;
-  res.sendFile(targetIndex);
+  const targetIndex = fs.existsSync(publicIndexPath) ? publicIndexPath : (fs.existsSync(rootIndexPath) ? rootIndexPath : null);
+
+  if (!targetIndex) {
+    return res.status(404).json({
+      success: false,
+      error: 'Resource not found',
+      path: req.path
+    });
+  }
+
+  res.sendFile(targetIndex, (err) => {
+    if (err && !res.headersSent) {
+      res.status(404).json({
+        success: false,
+        error: 'File not found',
+        path: req.path
+      });
+    }
+  });
+});
+
+// Global Express Error Handler to prevent unhandled exceptions crashing serverless runtime
+app.use((err, req, res, next) => {
+  console.error('[Unhandled Express Error]', err);
+  if (!res.headersSent) {
+    res.status(err.status || 500).json({
+      success: false,
+      error: err.message || 'Internal server error'
+    });
+  }
 });
 
 /**

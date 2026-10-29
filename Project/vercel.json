@@ -1,5 +1,10 @@
 {
   "version": 2,
+  "functions": {
+    "api/index.js": {
+      "includeFiles": "index.html"
+    }
+  },
   "rewrites": [
     {
       "source": "/api/(.*)",
@@ -28,6 +33,10 @@
     {
       "source": "/readyz",
       "destination": "/api/index.js"
+    },
+    {
+      "source": "/",
+      "destination": "/index.html"
     },
     {
       "source": "/((?!api/|health|config|livez|readyz|index\\.html)[^.]*)",
