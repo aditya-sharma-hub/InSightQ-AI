@@ -1,56 +1,33 @@
 {
   "version": 2,
-  "outputDirectory": ".",
-  "functions": {
-    "api/index.js": {
-      "includeFiles": "index.html"
-    }
-  },
-  "redirects": [
-    {
-      "source": "/server.js",
-      "destination": "/",
-      "permanent": false
-    },
-    {
-      "source": "/package.json",
-      "destination": "/",
-      "permanent": false
-    },
-    {
-      "source": "/package-lock.json",
-      "destination": "/",
-      "permanent": false
-    }
-  ],
   "rewrites": [
     {
       "source": "/api/(.*)",
-      "destination": "/api"
+      "destination": "/api/index.js"
     },
     {
       "source": "/health/(.*)",
-      "destination": "/api"
+      "destination": "/api/index.js"
     },
     {
       "source": "/health",
-      "destination": "/api"
+      "destination": "/api/index.js"
     },
     {
       "source": "/config.js",
-      "destination": "/api"
+      "destination": "/api/index.js"
     },
     {
       "source": "/config",
-      "destination": "/api"
+      "destination": "/api/index.js"
     },
     {
       "source": "/livez",
-      "destination": "/api"
+      "destination": "/api/index.js"
     },
     {
       "source": "/readyz",
-      "destination": "/api"
+      "destination": "/api/index.js"
     },
     {
       "source": "/((?!api/|health|config|livez|readyz).*)",

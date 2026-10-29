@@ -2,9 +2,11 @@
  * InsightIQ AI — Vercel Serverless Routing & Endpoint Verification Suite
  *
  * Verifies that:
- * 1. `vercel.json` correctly defines outputDirectory, functions, redirects, and rewrites without conflicts.
- * 2. Vercel serverless entry point (`api/index.js`) and Express app properly handle all required
- *    public, protected, static, SPA fallback, and security-blocked routes.
+ * 1. `vercel.json` points to explicit `/api/index.js` serverless handler without ambiguous `/api` directory routing.
+ * 2. Static files are correctly present in `public/` for native Edge CDN delivery.
+ * 3. CORS properly permits `*.vercel.app` production origins and localhost without throwing unhandled exceptions.
+ * 4. Express serverless entry point (`api/index.js`) and Express app handle all public, protected,
+ *    health, config, SPA fallback, and security-blocked routes.
  */
 
 const assert = require('assert');
@@ -33,18 +35,16 @@ async function run() {
   console.log('   INSIGHTIQ AI — VERCEL SERVERLESS ROUTING VERIFICATION        ');
   console.log('================================================================\n');
 
-  // 0. Vercel Configuration File Integrity
-  console.log('>>> [0. Vercel Deployment Configuration Integrity]');
+  // 0. Vercel Configuration & Public Directory Structure Integrity
+  console.log('>>> [0. Vercel Configuration & Public Directory Integrity]');
   try {
     const vercelJsonPath = path.resolve(__dirname, '../../vercel.json');
     assert(fs.existsSync(vercelJsonPath), 'vercel.json must exist');
     const vercelConfig = JSON.parse(fs.readFileSync(vercelJsonPath, 'utf8'));
 
     assert.strictEqual(vercelConfig.version, 2, 'vercel.json version must be 2');
-    assert.strictEqual(vercelConfig.outputDirectory, '.', 'outputDirectory must be set to root "." for static assets');
-    assert(vercelConfig.functions && vercelConfig.functions['api/index.js'], 'api/index.js function must be defined');
+    assert.strictEqual(vercelConfig.outputDirectory, undefined, 'outputDirectory must NOT override default to prevent Edge routing conflicts');
     assert(Array.isArray(vercelConfig.rewrites), 'rewrites array must be defined');
-    assert(Array.isArray(vercelConfig.redirects), 'redirects array must be defined');
 
     // Simulate Vercel routing logic against rewrites table
     function matchRewrite(pathname) {
@@ -57,17 +57,25 @@ async function run() {
       return null;
     }
 
-    assert.strictEqual(matchRewrite('/api/health'), '/api', '/api/* must rewrite to /api');
-    assert.strictEqual(matchRewrite('/api/config.js'), '/api', '/api/config.js must rewrite to /api');
-    assert.strictEqual(matchRewrite('/health'), '/api', '/health must rewrite to /api');
-    assert.strictEqual(matchRewrite('/config.js'), '/api', '/config.js must rewrite to /api');
-    assert.strictEqual(matchRewrite('/livez'), '/api', '/livez must rewrite to /api');
-    assert.strictEqual(matchRewrite('/readyz'), '/api', '/readyz must rewrite to /api');
+    assert.strictEqual(matchRewrite('/api/health'), '/api/index.js', '/api/* must rewrite to /api/index.js');
+    assert.strictEqual(matchRewrite('/api/config.js'), '/api/index.js', '/api/config.js must rewrite to /api/index.js');
+    assert.strictEqual(matchRewrite('/health'), '/api/index.js', '/health must rewrite to /api/index.js');
+    assert.strictEqual(matchRewrite('/config.js'), '/api/index.js', '/config.js must rewrite to /api/index.js');
+    assert.strictEqual(matchRewrite('/livez'), '/api/index.js', '/livez must rewrite to /api/index.js');
+    assert.strictEqual(matchRewrite('/readyz'), '/api/index.js', '/readyz must rewrite to /api/index.js');
     assert.strictEqual(matchRewrite('/'), '/index.html', '/ must rewrite to /index.html');
     assert.strictEqual(matchRewrite('/dashboard'), '/index.html', '/dashboard must rewrite to /index.html');
     assert.strictEqual(matchRewrite('/analytics'), '/index.html', '/analytics must rewrite to /index.html');
 
-    pass('vercel.json schema and rewrite routing matrix validated');
+    pass('vercel.json rewrites route to /api/index.js and /index.html without conflicts');
+
+    const publicDir = path.resolve(__dirname, '../../public');
+    assert(fs.existsSync(publicDir), 'public/ directory must exist for Vercel CDN');
+    assert(fs.existsSync(path.join(publicDir, 'index.html')), 'public/index.html must exist');
+    assert(fs.existsSync(path.join(publicDir, 'app.js')), 'public/app.js must exist');
+    assert(fs.existsSync(path.join(publicDir, 'styles', 'variables.css')), 'public/styles/variables.css must exist');
+    assert(fs.existsSync(path.join(publicDir, 'theme', 'tokens.bridge.js')), 'public/theme/tokens.bridge.js must exist');
+    pass('public/ directory contains all required Edge CDN assets');
   } catch (err) {
     fail('Vercel Configuration Integrity Failed', err);
   }
@@ -164,8 +172,35 @@ async function run() {
       pass('GET /api/catalog returns active intelligence catalog');
     }
 
-    // 3. Security Boundaries & Authentication Protection
-    console.log('\n>>> [3. RBAC & Tenant Authentication Gateways]');
+    // 3. CORS Verification for Production & Local Domains
+    console.log('\n>>> [3. CORS Policy Verification]');
+    {
+      const res = await fetch(`${baseUrl}/api/health`, {
+        headers: { Origin: 'https://in-sight-q-ai.vercel.app' }
+      });
+      assert.strictEqual(res.status, 200);
+      assert.strictEqual(res.headers.get('access-control-allow-origin'), 'https://in-sight-q-ai.vercel.app');
+      pass('CORS allows *.vercel.app production origin');
+    }
+    {
+      const res = await fetch(`${baseUrl}/api/health`, {
+        headers: { Origin: 'http://localhost:8085' }
+      });
+      assert.strictEqual(res.status, 200);
+      assert.strictEqual(res.headers.get('access-control-allow-origin'), 'http://localhost:8085');
+      pass('CORS allows localhost origin');
+    }
+    {
+      const res = await fetch(`${baseUrl}/api/health`, {
+        headers: { Origin: 'https://unauthorized-domain.com' }
+      });
+      assert.strictEqual(res.status, 200);
+      assert.strictEqual(res.headers.get('access-control-allow-origin'), null);
+      pass('CORS safely disallows unauthorized origin without crashing with 500');
+    }
+
+    // 4. RBAC & Tenant Authentication Gateways
+    console.log('\n>>> [4. RBAC & Tenant Authentication Gateways]');
     {
       const res = await fetch(`${baseUrl}/api/admin/overview`);
       assert.strictEqual(res.status, 401, 'Unauthenticated /api/admin/overview must return 401');
@@ -187,8 +222,8 @@ async function run() {
       pass('GET /api/datasets blocks unauthenticated callers (401)');
     }
 
-    // 4. Static Asset Delivery & SPA Fallback
-    console.log('\n>>> [4. Static Asset Delivery & SPA Fallback via Express Runtime]');
+    // 5. Static Asset Delivery & SPA Fallback
+    console.log('\n>>> [5. Static Asset Delivery & SPA Fallback via Express Runtime]');
     {
       const res = await fetch(`${baseUrl}/`);
       assert.strictEqual(res.status, 200, 'GET / must return 200');
@@ -233,8 +268,8 @@ async function run() {
       pass('GET /dashboard SPA fallback route returns index.html');
     }
 
-    // 5. Protected Resource Security Blocking
-    console.log('\n>>> [5. Protected System Resource Blocking]');
+    // 6. Protected Resource Security Blocking
+    console.log('\n>>> [6. Protected System Resource Blocking]');
     {
       const res = await fetch(`${baseUrl}/server.js`);
       assert.strictEqual(res.status, 403, '/server.js must return 403');
@@ -270,7 +305,7 @@ async function run() {
   console.log('\n================================================================');
   console.log(`   VERCEL SERVERLESS ROUTING SUMMARY: ${passedTests}/${totalTests} TESTS PASSED`);
   if (passedTests === totalTests) {
-    console.log('   >>> ALL SERVERLESS API, STATIC & ROUTE CHECKS FULLY VERIFIED (100%) <<<');
+    console.log('   >>> ALL SERVERLESS API, STATIC, CORS & ROUTE CHECKS FULLY VERIFIED (100%) <<<');
   } else {
     console.log('   >>> FAILURES DETECTED <<<');
   }

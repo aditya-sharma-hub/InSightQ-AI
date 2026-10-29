@@ -1,0 +1,192 @@
+/* ==========================================================================
+   InsightIQ AI — Typography System & Global Reset
+   Display, Headings, Subtitles, Body, Kicker, Captions, Mono & Accessible Focus
+   ========================================================================== */
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  font-family: var(--font-sans);
+  font-size: 16px;
+  line-height: var(--line-height-normal);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  color-scheme: dark;
+}
+
+body {
+  background-color: var(--bg-app);
+  color: var(--text-primary);
+  min-height: 100vh;
+  overflow-x: hidden;
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-regular);
+}
+
+button, input, textarea, select {
+  font: inherit;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+/* --------------------------------------------------------------------------
+   Semantic Heading Defaults
+   -------------------------------------------------------------------------- */
+h1, h2, h3, h4, h5, h6 {
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: -0.015em;
+}
+
+h1 {
+  font-size: var(--font-size-3xl);
+  line-height: var(--line-height-tight);
+  letter-spacing: -0.02em;
+}
+
+h2 {
+  font-size: var(--font-size-xl);
+  line-height: var(--line-height-snug);
+  letter-spacing: -0.015em;
+}
+
+h3 {
+  font-size: var(--font-size-lg);
+  line-height: var(--line-height-snug);
+}
+
+h4 {
+  font-size: var(--font-size-base);
+  line-height: var(--line-height-normal);
+}
+
+p {
+  color: var(--text-secondary);
+  font-size: var(--font-size-base);
+  line-height: var(--line-height-normal);
+}
+
+/* --------------------------------------------------------------------------
+   Typography Scale Utility Classes
+   -------------------------------------------------------------------------- */
+.font-display {
+  font-size: var(--font-size-5xl); /* 36px */
+  line-height: 2.75rem;            /* 44px */
+  font-weight: var(--font-weight-bold);
+  letter-spacing: -0.025em;
+  color: var(--text-primary);
+}
+
+.font-heading {
+  font-size: var(--font-size-4xl); /* 28px */
+  line-height: 2.25rem;            /* 36px */
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+}
+
+.font-title {
+  font-size: var(--font-size-2xl); /* 20px */
+  line-height: 1.75rem;            /* 28px */
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: -0.015em;
+  color: var(--text-primary);
+}
+
+.font-subtitle {
+  font-size: var(--font-size-lg);  /* 16px */
+  line-height: 1.5rem;             /* 24px */
+  font-weight: var(--font-weight-medium);
+  letter-spacing: -0.01em;
+  color: var(--text-secondary);
+}
+
+.font-body {
+  font-size: var(--font-size-base); /* 14px */
+  line-height: 1.25rem;             /* 20px */
+  font-weight: var(--font-weight-regular);
+  color: var(--text-secondary);
+}
+
+.font-caption {
+  font-size: var(--font-size-xs);   /* 12px */
+  line-height: 1rem;                /* 16px */
+  font-weight: var(--font-weight-regular);
+  color: var(--text-muted);
+}
+
+.font-kicker {
+  font-size: var(--font-size-2xs);  /* 11px */
+  line-height: 0.875rem;            /* 14px */
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+
+.font-button {
+  font-size: var(--font-size-base); /* 14px */
+  line-height: 1.25rem;
+  font-weight: var(--font-weight-medium);
+  letter-spacing: 0.01em;
+}
+
+.font-mono {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* --------------------------------------------------------------------------
+   Text Color Utilities
+   -------------------------------------------------------------------------- */
+.text-primary   { color: var(--text-primary) !important; }
+.text-secondary { color: var(--text-secondary) !important; }
+.text-muted     { color: var(--text-muted) !important; }
+.text-tertiary  { color: var(--text-tertiary) !important; }
+.text-cyan      { color: var(--accent-cyan) !important; }
+.text-blue      { color: var(--accent-blue) !important; }
+.text-violet    { color: var(--accent-violet) !important; }
+.text-emerald   { color: var(--accent-emerald) !important; }
+.text-warning   { color: var(--accent-warning) !important; }
+.text-error     { color: var(--accent-error) !important; }
+
+/* --------------------------------------------------------------------------
+   Accessible Focus Ring Utility
+   -------------------------------------------------------------------------- */
+:focus-visible {
+  outline: 2px solid var(--border-focus) !important;
+  outline-offset: 2px !important;
+  box-shadow: 0 0 0 3px var(--ring-focus) !important;
+}
+
+/* --------------------------------------------------------------------------
+   Scrollbar Customization (Subtle Navy & Cyan Hover)
+   -------------------------------------------------------------------------- */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: var(--radius-full);
+  transition: background var(--transition-fast);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(24, 200, 244, 0.35);
+}
+

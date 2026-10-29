@@ -1,3 +1,4 @@
+const fs = require('fs');
 const path = require('path');
 const express = require('express');
 const cors = require('cors');
@@ -99,13 +100,14 @@ function parsePort(rawPort, fallback = FALLBACK_DEFAULT_PORT) {
 const DEFAULT_PORT = parsePort(process.env.PORT, FALLBACK_DEFAULT_PORT);
 
 // Secure CORS: restrict to same-origin and localhost dev environments
-const allowedOriginRegex = /^(https?:\/\/(localhost|127\.0\.0\.1)(:[0-9]+)?)$/;
+// Secure CORS: allow same-origin, localhost dev environments, and official deployment domains (*.vercel.app)
+const allowedOriginRegex = /^(https?:\/\/(localhost|127\.0\.0\.1)(:[0-9]+)?|https:\/\/([a-zA-Z0-9-]+\.)*vercel\.app)$/;
 app.use(cors({
   origin: (origin, callback) => {
-    if (!origin || allowedOriginRegex.test(origin)) {
+    if (!origin || allowedOriginRegex.test(origin) || (process.env.ALLOWED_ORIGIN && origin === process.env.ALLOWED_ORIGIN)) {
       return callback(null, true);
     }
-    return callback(new Error('Blocked by CORS policy: unauthorized origin.'));
+    return callback(null, false);
   },
   credentials: true
 }));
@@ -3552,7 +3554,14 @@ app.get(['/api/catalog/source/:id', '/api/catalog/:id'], (req, res) => {
   }
 });
 
-// Serve static assets safely (denies dotfiles and disables direct index directory listing)
+// Serve static assets safely (checks both public/ and current directory)
+const publicDir = path.join(__dirname, 'public');
+if (fs.existsSync(publicDir)) {
+  app.use(express.static(publicDir, {
+    dotfiles: 'deny',
+    index: false
+  }));
+}
 app.use(express.static(__dirname, {
   dotfiles: 'deny',
   index: false
@@ -3560,7 +3569,10 @@ app.use(express.static(__dirname, {
 
 // Single Page Application Fallback
 app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'index.html'));
+  const publicIndexPath = path.join(__dirname, 'public', 'index.html');
+  const rootIndexPath = path.join(__dirname, 'index.html');
+  const targetIndex = fs.existsSync(publicIndexPath) ? publicIndexPath : rootIndexPath;
+  res.sendFile(targetIndex);
 });
 
 /**

@@ -1,0 +1,9 @@
+customer_id,customer_name,email,plan_tier,monthly_spend,signup_date,churn_risk,support_tickets
+CUST_1001,Acme Corp,contact@acme.com,Enterprise,1450.50,2024-01-15,false,2
+CUST_1002,Global Tech,info@globaltech.io,Professional,499.00,2024-03-22,false,0
+CUST_1003,Starlight Data,support@starlight.net,Enterprise,2890.00,2023-11-05,false,1
+CUST_1004,Vortex Systems,admin@vortex.org,Starter,99.00,2025-02-01,true,5
+CUST_1005,Apex Logistics,logistics@apex.com,Professional,650.00,2024-08-19,false,0
+CUST_1006,Nexus Cloud,ops@nexuscloud.io,Enterprise,4200.00,2023-09-12,false,3
+CUST_1007,Hyperion AI,hello@hyperion.ai,Professional,750.25,2024-12-01,true,4
+CUST_1008,Solaria Energy,team@solaria.com,Enterprise,1950.00,2024-05-10,false,1
