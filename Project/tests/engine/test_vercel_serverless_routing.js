@@ -1,12 +1,16 @@
 /**
  * InsightIQ AI — Vercel Serverless Routing & Endpoint Verification Suite
  *
- * Verifies that the Vercel serverless entry point (`api/index.js`) and Express app
- * properly handle all required public, protected, static, and security-blocked routes.
+ * Verifies that:
+ * 1. `vercel.json` correctly defines outputDirectory, functions, redirects, and rewrites without conflicts.
+ * 2. Vercel serverless entry point (`api/index.js`) and Express app properly handle all required
+ *    public, protected, static, SPA fallback, and security-blocked routes.
  */
 
 const assert = require('assert');
 const http = require('http');
+const fs = require('fs');
+const path = require('path');
 const app = require('../../api/index.js');
 
 let passedTests = 0;
@@ -29,6 +33,45 @@ async function run() {
   console.log('   INSIGHTIQ AI — VERCEL SERVERLESS ROUTING VERIFICATION        ');
   console.log('================================================================\n');
 
+  // 0. Vercel Configuration File Integrity
+  console.log('>>> [0. Vercel Deployment Configuration Integrity]');
+  try {
+    const vercelJsonPath = path.resolve(__dirname, '../../vercel.json');
+    assert(fs.existsSync(vercelJsonPath), 'vercel.json must exist');
+    const vercelConfig = JSON.parse(fs.readFileSync(vercelJsonPath, 'utf8'));
+
+    assert.strictEqual(vercelConfig.version, 2, 'vercel.json version must be 2');
+    assert.strictEqual(vercelConfig.outputDirectory, '.', 'outputDirectory must be set to root "." for static assets');
+    assert(vercelConfig.functions && vercelConfig.functions['api/index.js'], 'api/index.js function must be defined');
+    assert(Array.isArray(vercelConfig.rewrites), 'rewrites array must be defined');
+    assert(Array.isArray(vercelConfig.redirects), 'redirects array must be defined');
+
+    // Simulate Vercel routing logic against rewrites table
+    function matchRewrite(pathname) {
+      for (const r of vercelConfig.rewrites) {
+        const regex = new RegExp('^' + r.source + '$');
+        if (regex.test(pathname)) {
+          return r.destination;
+        }
+      }
+      return null;
+    }
+
+    assert.strictEqual(matchRewrite('/api/health'), '/api', '/api/* must rewrite to /api');
+    assert.strictEqual(matchRewrite('/api/config.js'), '/api', '/api/config.js must rewrite to /api');
+    assert.strictEqual(matchRewrite('/health'), '/api', '/health must rewrite to /api');
+    assert.strictEqual(matchRewrite('/config.js'), '/api', '/config.js must rewrite to /api');
+    assert.strictEqual(matchRewrite('/livez'), '/api', '/livez must rewrite to /api');
+    assert.strictEqual(matchRewrite('/readyz'), '/api', '/readyz must rewrite to /api');
+    assert.strictEqual(matchRewrite('/'), '/index.html', '/ must rewrite to /index.html');
+    assert.strictEqual(matchRewrite('/dashboard'), '/index.html', '/dashboard must rewrite to /index.html');
+    assert.strictEqual(matchRewrite('/analytics'), '/index.html', '/analytics must rewrite to /index.html');
+
+    pass('vercel.json schema and rewrite routing matrix validated');
+  } catch (err) {
+    fail('Vercel Configuration Integrity Failed', err);
+  }
+
   const server = http.createServer(app);
   await new Promise((resolve) => server.listen(0, resolve));
   const port = server.address().port;
@@ -36,7 +79,7 @@ async function run() {
 
   try {
     // 1. Health & Observability Endpoints
-    console.log('>>> [1. Health & Observability Endpoints]');
+    console.log('\n>>> [1. Health & Observability Endpoints]');
     {
       const res = await fetch(`${baseUrl}/health`);
       const body = await res.json();
@@ -60,8 +103,18 @@ async function run() {
       assert.strictEqual(res.status, 200, '/health/readiness should return 200');
       pass('GET /health/readiness responds 200');
     }
+    {
+      const res = await fetch(`${baseUrl}/livez`);
+      assert.strictEqual(res.status, 200, '/livez should return 200');
+      pass('GET /livez responds 200');
+    }
+    {
+      const res = await fetch(`${baseUrl}/readyz`);
+      assert.strictEqual(res.status, 200, '/readyz should return 200');
+      pass('GET /readyz responds 200');
+    }
 
-    // 2. Client Configuration & Runtime Deliverables
+    // 2. Client Configuration & Public Endpoints
     console.log('\n>>> [2. Client Configuration & Public Endpoints]');
     {
       const res = await fetch(`${baseUrl}/api/config`);
@@ -79,6 +132,14 @@ async function run() {
       assert(res.headers.get('content-type').includes('javascript'), 'Content-type must be javascript');
       assert(text.includes('window.__ENV__'), 'Must inject window.__ENV__ config');
       pass('GET /api/config.js delivers client script for index.html bootstrap');
+    }
+    {
+      const res = await fetch(`${baseUrl}/config.js`);
+      const text = await res.text();
+      assert.strictEqual(res.status, 200, '/config.js alias should return 200');
+      assert(res.headers.get('content-type').includes('javascript'), 'Content-type must be javascript');
+      assert(text.includes('window.__ENV__'), 'Must inject window.__ENV__ config');
+      pass('GET /config.js alias delivers client script');
     }
     {
       const res = await fetch(`${baseUrl}/api/user/roles`);
@@ -126,8 +187,15 @@ async function run() {
       pass('GET /api/datasets blocks unauthenticated callers (401)');
     }
 
-    // 4. Static Asset Delivery via Express Runtime
-    console.log('\n>>> [4. Static Asset Delivery via Express Handler]');
+    // 4. Static Asset Delivery & SPA Fallback
+    console.log('\n>>> [4. Static Asset Delivery & SPA Fallback via Express Runtime]');
+    {
+      const res = await fetch(`${baseUrl}/`);
+      assert.strictEqual(res.status, 200, 'GET / must return 200');
+      const html = await res.text();
+      assert(html.includes('Intelligence Engine'), 'GET / must return index.html containing Intelligence Engine');
+      pass('GET / serves index.html at root route');
+    }
     {
       const res = await fetch(`${baseUrl}/index.html`);
       assert.strictEqual(res.status, 200);
@@ -136,14 +204,33 @@ async function run() {
       pass('GET /index.html serves application SPA entrypoint');
     }
     {
+      const res = await fetch(`${baseUrl}/app.js`);
+      assert.strictEqual(res.status, 200, 'GET /app.js must return 200');
+      const js = await res.text();
+      assert(js.length > 10000, 'app.js bundle must have substantive content');
+      pass('GET /app.js delivers main client application bundle');
+    }
+    {
       const res = await fetch(`${baseUrl}/styles/variables.css`);
       assert.strictEqual(res.status, 200);
       pass('GET /styles/variables.css delivers design system tokens');
     }
     {
+      const res = await fetch(`${baseUrl}/styles/admin.css`);
+      assert.strictEqual(res.status, 200);
+      pass('GET /styles/admin.css delivers admin layout styles');
+    }
+    {
       const res = await fetch(`${baseUrl}/theme/tokens.bridge.js`);
       assert.strictEqual(res.status, 200);
       pass('GET /theme/tokens.bridge.js delivers runtime token bridge');
+    }
+    {
+      const res = await fetch(`${baseUrl}/dashboard`);
+      assert.strictEqual(res.status, 200);
+      const html = await res.text();
+      assert(html.includes('Intelligence Engine'), 'SPA fallback must return index.html');
+      pass('GET /dashboard SPA fallback route returns index.html');
     }
 
     // 5. Protected Resource Security Blocking
@@ -183,7 +270,7 @@ async function run() {
   console.log('\n================================================================');
   console.log(`   VERCEL SERVERLESS ROUTING SUMMARY: ${passedTests}/${totalTests} TESTS PASSED`);
   if (passedTests === totalTests) {
-    console.log('   >>> ALL SERVERLESS API & ROUTE CHECKS FULLY VERIFIED (100%) <<<');
+    console.log('   >>> ALL SERVERLESS API, STATIC & ROUTE CHECKS FULLY VERIFIED (100%) <<<');
   } else {
     console.log('   >>> FAILURES DETECTED <<<');
   }
