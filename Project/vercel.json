@@ -1,0 +1,33 @@
+{
+  "version": 2,
+  "rewrites": [
+    {
+      "source": "/api/(.*)",
+      "destination": "/api"
+    },
+    {
+      "source": "/health/(.*)",
+      "destination": "/api"
+    },
+    {
+      "source": "/health",
+      "destination": "/api"
+    },
+    {
+      "source": "/config.js",
+      "destination": "/api"
+    },
+    {
+      "source": "/config",
+      "destination": "/api"
+    },
+    {
+      "source": "/livez",
+      "destination": "/api"
+    },
+    {
+      "source": "/readyz",
+      "destination": "/api"
+    }
+  ]
+}

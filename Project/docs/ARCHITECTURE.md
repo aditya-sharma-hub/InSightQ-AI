@@ -76,3 +76,4 @@ Project/
 - **Security Middleware:** Blocks public access to server internals (`.env`, `.git`, `server.js`, `engine/`, `tests/`, `scripts/`, `supabase/`, `node_modules/`).
 - **Rate Limiting:** Sliding-window rate limiter protecting `/api` and AI copilot endpoints.
 - **RBAC:** Four core personas (Data Analyst, Data Scientist, Business Analyst, Admin). Admin endpoints (`/api/admin/*`) require server-verified admin tokens.
+

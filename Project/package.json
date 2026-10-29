@@ -15,6 +15,7 @@
     "test:auth": "node tests/auth/test_auth_regression.js",
     "test:clean": "node tests/ui/test_clean_workspace.js",
     "test:port": "node tests/ui/test_port_fallback.js",
+    "test:vercel": "node tests/engine/test_vercel_serverless_routing.js",
     "lint": "node -c server.js && node -c engine/index.js && node -c engine/intelligence/index.js"
   },
   "dependencies": {

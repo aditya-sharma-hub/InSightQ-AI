@@ -50,9 +50,15 @@ GEMINI_API_KEY=AIzaSy...
 NODE_ENV=production
 ```
 
+### Serverless Architecture & Routing
+- `api/index.js`: Serverless Function entry point exporting the Express `app` instance.
+- `vercel.json`: Rewrites `/api/(.*)`, `/health*`, and `/config*` to `/api` while serving static assets (`index.html`, `styles/`, `theme/`, `assets/`, `app.js`) directly via Vercel Edge CDN.
+- Dynamic port listener in `server.js` only activates in standalone mode (`require.main === module`), allowing frictionless zero-downtime serverless execution on Vercel.
+
 ---
 
 ## 3. Database & Migrations
 Supabase migrations are located in `supabase/migrations/` and should be applied using the Supabase CLI or SQL Editor:
 - Migrations `001` through `021`: Baseline schema, RLS, functions, and analytics tables.
 - Migrations `20260807` through `20260814`: Storage security, catalog relationships, and role persistence.
+
