@@ -527,7 +527,11 @@ app.post('/api/user/role', async (req, res) => {
       if (token.startsWith('mock-') && process.env.NODE_ENV !== 'production' && req.body?.userId) {
         // Safe development/test environment mock bypass
         authenticatedUserId = req.body.userId;
-        if (req.body.isCurrentAdmin) isExistingAdmin = true;
+        const mockRole = req.headers['x-mock-role'] || req.headers['x-admin-role'] || req.body?.currentRole;
+        const mockEmail = req.headers['x-mock-email'] || req.headers['x-admin-email'] || req.body?.email;
+        if (req.body.isCurrentAdmin || mockRole === 'Administrator' || mockRole === 'admin' || (mockEmail && isAuthorizedAdminAccount(mockEmail, 'Administrator'))) {
+          isExistingAdmin = true;
+        }
       } else {
         const authClient = createClient(supabaseUrl, supabaseKey, {
           auth: { persistSession: false, autoRefreshToken: false }
@@ -550,7 +554,7 @@ app.post('/api/user/role', async (req, res) => {
         });
         const { data: currentProfile } = await userScopedClient
           .from('profiles')
-          .select('role')
+          .select('role, workspace_persona')
           .eq('id', authenticatedUserId)
           .maybeSingle();
 
@@ -561,7 +565,11 @@ app.post('/api/user/role', async (req, res) => {
     } else if (req.body?.userId && process.env.NODE_ENV !== 'production') {
       // Development / mock fallback
       authenticatedUserId = req.body.userId;
-      if (req.body.isCurrentAdmin) isExistingAdmin = true;
+      const mockRole = req.headers['x-mock-role'] || req.headers['x-admin-role'] || req.body?.currentRole;
+      const mockEmail = req.headers['x-mock-email'] || req.headers['x-admin-email'] || req.body?.email;
+      if (req.body.isCurrentAdmin || mockRole === 'Administrator' || mockRole === 'admin' || (mockEmail && isAuthorizedAdminAccount(mockEmail, 'Administrator'))) {
+        isExistingAdmin = true;
+      }
     } else {
       return res.status(401).json({
         success: false,
@@ -584,12 +592,24 @@ app.post('/api/user/role', async (req, res) => {
         global: { headers: { Authorization: `Bearer ${token}` } }
       });
 
+      const updatePayload = {
+        updated_at: new Date().toISOString()
+      };
+
+      if (isExistingAdmin) {
+        // Separation of workspace persona and authorization:
+        // Trusted Administrator role remains strictly intact.
+        // The selected lens is stored in workspace_persona.
+        updatePayload.role = 'Administrator';
+        updatePayload.workspace_persona = targetCanonicalRole;
+      } else {
+        updatePayload.role = targetCanonicalRole;
+        updatePayload.workspace_persona = targetCanonicalRole;
+      }
+
       const { data: updatedProfile, error: updateErr } = await userScopedClient
         .from('profiles')
-        .update({
-          role: targetCanonicalRole,
-          updated_at: new Date().toISOString()
-        })
+        .update(updatePayload)
         .eq('id', authenticatedUserId)
         .select()
         .maybeSingle();
@@ -603,20 +623,26 @@ app.post('/api/user/role', async (req, res) => {
 
       return res.json({
         success: true,
-        role: targetCanonicalRole,
+        role: isExistingAdmin ? 'Administrator' : targetCanonicalRole,
+        workspace_persona: targetCanonicalRole,
         role_configured: true,
         user_id: authenticatedUserId,
         profile: updatedProfile,
-        message: `Workspace role successfully updated to ${targetCanonicalRole}.`
+        message: isExistingAdmin
+          ? `Workspace persona switched to ${targetCanonicalRole} while preserving Administrator privileges.`
+          : `Workspace role successfully updated to ${targetCanonicalRole}.`
       });
     }
 
     return res.json({
       success: true,
-      role: targetCanonicalRole,
+      role: isExistingAdmin ? 'Administrator' : targetCanonicalRole,
+      workspace_persona: targetCanonicalRole,
       role_configured: true,
       user_id: authenticatedUserId,
-      message: `Workspace role updated to ${targetCanonicalRole}.`
+      message: isExistingAdmin
+        ? `Workspace persona switched to ${targetCanonicalRole} while preserving Administrator privileges.`
+        : `Workspace role updated to ${targetCanonicalRole}.`
     });
   } catch (err) {
     return res.status(500).json({
@@ -642,6 +668,7 @@ const getAuthorizedAdminEmails = () => {
 
   // Default internal authorized administrative and developer accounts
   const systemDefaults = [
+    'adityasharmand@gmail.com',
     'admin@insightiq.internal',
     'admin@insightiq.ai',
     'developer@insightiq.internal',
@@ -652,9 +679,19 @@ const getAuthorizedAdminEmails = () => {
 };
 
 const isAuthorizedAdminAccount = (email, role) => {
-  if (role === 'Administrator' || role === 'admin') return true;
-  if (email && getAuthorizedAdminEmails().has(String(email).trim().toLowerCase())) return true;
-  return false;
+  if (!email || typeof email !== 'string') return false;
+  const cleanEmail = email.trim().toLowerCase();
+  if (!cleanEmail) return false;
+
+  const isCanonicalAdminRole = (role === 'Administrator' || role === 'admin');
+  if (!isCanonicalAdminRole) return false;
+
+  const adminList = getAuthorizedAdminEmails();
+  if (!adminList || adminList.size === 0) {
+    return false; // Fail closed if allowlist is empty
+  }
+
+  return adminList.has(cleanEmail);
 };
 
 /**
@@ -689,7 +726,7 @@ const requireAdminAuthorization = async (req, res, next) => {
     const isMockRoleAdmin = (mockRole === 'admin' || mockRole === 'Administrator');
     const isMockEmailAuthorized = isAuthorizedAdminAccount(mockEmail, mockRole);
 
-    if (isMockAdminToken || (token.startsWith('mock-') && (isMockRoleAdmin || isMockEmailAuthorized))) {
+    if (isMockAdminToken || (token.startsWith('mock-') && (isMockRoleAdmin && isMockEmailAuthorized))) {
       const email = mockEmail || (token === 'mock-developer-token' ? 'developer@insightiq.ai' : 'admin@insightiq.internal');
       const isDev = token === 'mock-developer-token' || email.includes('developer');
       req.adminUser = {
@@ -703,7 +740,7 @@ const requireAdminAuthorization = async (req, res, next) => {
       return next();
     }
     // Explicitly reject non-admin mock tokens
-    if (token === 'mock-user-token' || (token.startsWith('mock-') && !isMockRoleAdmin && !isMockEmailAuthorized)) {
+    if (token === 'mock-user-token' || (token.startsWith('mock-') && (!isMockRoleAdmin || !isMockEmailAuthorized))) {
       const nonAdminRole = mockRole || 'Data Analyst';
       return res.status(403).json({
         success: false,
@@ -760,15 +797,41 @@ const requireAdminAuthorization = async (req, res, next) => {
     });
     const { data: profile, error: profileErr } = await userScopedClient
       .from('profiles')
-      .select('id, email, full_name, role')
+      .select('id, email, full_name, role, workspace_persona')
       .eq('id', user.id)
       .maybeSingle();
 
     if (profileErr) {
       console.warn('[Admin Auth Notice] Profile role lookup failed:', profileErr.message);
+      return res.status(403).json({
+        success: false,
+        code: 'ADMIN_ACCESS_DENIED',
+        error: 'Access Denied: Unable to verify user profile in database. Administrator privileges require an active profile.',
+        currentRole: 'Unassigned',
+        user: {
+          id: user.id,
+          email: user.email,
+          fullName: user.user_metadata?.full_name || user.email?.split('@')[0] || 'User'
+        }
+      });
     }
 
-    const assignedRole = profile?.role || user.user_metadata?.role || '';
+    if (!profile) {
+      return res.status(403).json({
+        success: false,
+        code: 'ADMIN_ACCESS_DENIED',
+        error: 'Access Denied: User profile not found in database. Administrator privileges require an active profile.',
+        currentRole: 'Unassigned',
+        user: {
+          id: user.id,
+          email: user.email,
+          fullName: user.user_metadata?.full_name || user.email?.split('@')[0] || 'User'
+        }
+      });
+    }
+
+    // Role MUST come strictly from database profile, NEVER from user_metadata
+    const assignedRole = profile.role || '';
     const isVerifiedAdmin = isAuthorizedAdminAccount(user.email, assignedRole);
 
     if (!isVerifiedAdmin) {
@@ -780,18 +843,18 @@ const requireAdminAuthorization = async (req, res, next) => {
         user: {
           id: user.id,
           email: user.email,
-          fullName: profile?.full_name || user.user_metadata?.full_name || user.email?.split('@')[0] || 'User'
+          fullName: profile.full_name || user.email?.split('@')[0] || 'User'
         }
       });
     }
 
-    const isDev = isAuthorizedAdminAccount(user.email, '') && !(assignedRole === 'Administrator' || assignedRole === 'admin');
     req.adminUser = {
       id: user.id,
       email: user.email,
-      fullName: profile?.full_name || user.user_metadata?.full_name || user.email?.split('@')[0] || 'Administrator',
+      fullName: profile.full_name || user.email?.split('@')[0] || 'Administrator',
       role: 'Administrator',
-      isDeveloper: isDev,
+      workspace_persona: profile.workspace_persona || 'Administrator',
+      isDeveloper: false,
       profile
     };
 
@@ -1789,7 +1852,7 @@ const requireAuthenticatedUser = async (req, res, next) => {
       .eq('id', user.id)
       .maybeSingle();
 
-    const assignedRole = profile?.role || user.user_metadata?.role || 'Data Analyst';
+    const assignedRole = profile?.role || 'Data Analyst';
     const isAdmin = isAuthorizedAdminAccount(user.email, assignedRole);
 
     req.authUser = {

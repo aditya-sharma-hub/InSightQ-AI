@@ -21900,7 +21900,33 @@ function InsightIQSettingsView({
    * workspace observability, and database schema status without mutating records.
    * Gated by server-side verification of Administrator credentials.
    */
-  function AdminPortal({ session, userProfile, onNavigateBack, userDatasets, userProjects, handleSignOut, isDev }) {
+  function MobileBottomNav({ activeNav, onNavigate }) {
+    const navItems = [
+      { id: 'overview', label: 'Dashboard', icon: BarChart2Icon },
+      { id: 'analytics', label: 'Analytics', icon: LayersIcon },
+      { id: 'copilot', label: 'AI Copilot', icon: SparklesIcon },
+      { id: 'datasets', label: 'Datasets', icon: DatabaseIcon },
+      { id: 'profile', label: 'Profile', icon: UserIcon }
+    ];
+
+    return React.createElement('nav', {
+      className: 'mobile-bottom-nav',
+      'aria-label': 'Main Workspace Navigation'
+    },
+      navItems.map(m => React.createElement('button', {
+        key: m.id,
+        type: 'button',
+        className: `mobile-nav-btn ${activeNav === m.id ? 'active' : ''}`,
+        onClick: () => onNavigate && onNavigate(m.id),
+        'aria-label': m.label
+      },
+        React.createElement(m.icon, { size: 18 }),
+        React.createElement('span', null, m.label)
+      ))
+    );
+  }
+
+  function AdminPortal({ session, userProfile, onNavigateBack, onNavigate, userDatasets, userProjects, handleSignOut, isDev }) {
     // Determine initial sub-tab from URL hash or default to 'overview'
     const getInitialSubTab = () => {
       const hash = (window.location.hash || '').replace(/^#[\/]?/, '').trim();
@@ -21999,7 +22025,8 @@ function InsightIQSettingsView({
               'Content-Type': 'application/json',
               ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
               ...(authEmail ? { 'X-User-Email': authEmail, 'X-Mock-Email': authEmail } : {}),
-              ...(userProfile?.role ? { 'X-User-Role': userProfile.role, 'X-Mock-Role': userProfile.role } : {})
+              ...(userProfile?.role ? { 'X-User-Role': userProfile.role, 'X-Mock-Role': userProfile.role } : {}),
+              ...(userProfile?.workspace_persona ? { 'X-Workspace-Persona': userProfile.workspace_persona, 'X-Mock-Persona': userProfile.workspace_persona } : {})
             }
           });
 
@@ -22282,7 +22309,8 @@ function InsightIQSettingsView({
           React.createElement('p', { style: { color: 'var(--text-secondary)', margin: 0, fontSize: '0.875rem' } },
             'Checking cryptographic credentials with server-side RBAC engine...'
           )
-        )
+        ),
+        React.createElement(MobileBottomNav, { activeNav: 'admin', onNavigate: onNavigate || onNavigateBack })
       );
     }
 
@@ -22361,7 +22389,8 @@ function InsightIQSettingsView({
               }, `← Return to ${deniedRole} Workspace`)
             )
           )
-        )
+        ),
+        React.createElement(MobileBottomNav, { activeNav: 'admin', onNavigate: onNavigate || onNavigateBack })
       );
     }
 
@@ -22408,7 +22437,8 @@ function InsightIQSettingsView({
               onClick: onNavigateBack
             }, 'Return to Workspace')
           )
-        )
+        ),
+        React.createElement(MobileBottomNav, { activeNav: 'admin', onNavigate: onNavigate || onNavigateBack })
       );
     }
 
@@ -23710,7 +23740,9 @@ function InsightIQSettingsView({
               )
             )
           )
-        )
+        ),
+        /* Reused Mobile Bottom Navigation Rail */
+        React.createElement(MobileBottomNav, { activeNav: 'admin', onNavigate: onNavigate || onNavigateBack })
       )
     );
   }
@@ -23836,7 +23868,9 @@ function InsightIQSettingsView({
 
     /* CRITICAL SECURITY RULE: If an authenticated profile exists with a valid role, that authorized role is authoritative */
     const effectiveRole = (session?.user && userProfile?.role && isValidWorkspaceRole(userProfile.role))
-      ? authRole
+      ? (userProfile.role === 'Administrator'
+          ? (normalizeRole(userProfile.workspace_persona) || 'admin')
+          : authRole)
       : (isDev ? (devPreviewRole || authRole) : authRole);
 
     /* Shared Enterprise Projects State */
@@ -31646,17 +31680,24 @@ function InsightIQSettingsView({
           return;
         }
 
+        const isAdministrator = userProfile?.role === 'Administrator' || userProfile?.role === 'admin' || isVerifiedAdmin;
+
         // 4. Role switch verified and persisted by backend API
         const client = supabaseClient || (window.getSupabaseClient && window.getSupabaseClient());
         if (client?.auth) {
           try {
-            await client.auth.updateUser({ data: { role: canonicalDisplayRole, role_configured: true } }).catch(() => {});
+            if (isAdministrator) {
+              await client.auth.updateUser({ data: { workspace_persona: canonicalDisplayRole, role_configured: true } }).catch(() => {});
+            } else {
+              await client.auth.updateUser({ data: { role: canonicalDisplayRole, workspace_persona: canonicalDisplayRole, role_configured: true } }).catch(() => {});
+            }
           } catch (e) {}
         }
 
         const updatedProfile = {
           ...userProfile,
-          role: canonicalDisplayRole,
+          role: isAdministrator ? 'Administrator' : canonicalDisplayRole,
+          workspace_persona: canonicalDisplayRole,
           role_configured: true
         };
 
@@ -31671,13 +31712,20 @@ function InsightIQSettingsView({
         setUserProfile(updatedProfile);
         setIsSwitchingRole(false);
         setIsSwitchRoleModalOpen(false);
-        setRoleToastMessage(`Workspace role switched to ${canonicalDisplayRole}.`);
+        setRoleToastMessage(isAdministrator
+          ? `Workspace persona switched to ${canonicalDisplayRole} (Administrator privileges preserved).`
+          : `Workspace role switched to ${canonicalDisplayRole}.`
+        );
 
         // If active navigation is not allowed in new role, redirect to overview
         const canonicalNewRoleId = getCanonicalRole(canonicalDisplayRole);
         const requiredPerm = ROUTE_PERMISSIONS[activeNav];
         if (requiredPerm && !can(canonicalNewRoleId, requiredPerm)) {
-          handleNavigate('overview');
+          if (activeNav === 'admin' && isAdministrator) {
+            // Preserved: Administrator on Admin Portal remains on Admin Portal
+          } else {
+            handleNavigate('overview');
+          }
         }
       } catch (err) {
         console.error('[Role Switch Error]', err);
@@ -34028,6 +34076,7 @@ function InsightIQSettingsView({
           session,
           userProfile,
           onNavigateBack: () => handleNavigate('overview'),
+          onNavigate: handleNavigate,
           userDatasets,
           userProjects,
           handleSignOut,
@@ -34136,22 +34185,10 @@ function InsightIQSettingsView({
           ),
 
           /* MOBILE BOTTOM NAVIGATION BAR */
-          React.createElement('nav', { className: 'mobile-bottom-nav' },
-            [
-              { id: 'overview', label: 'Dashboard', icon: BarChart2Icon },
-              { id: 'analytics', label: 'Analytics', icon: LayersIcon },
-              { id: 'copilot', label: 'AI Copilot', icon: SparklesIcon },
-              { id: 'datasets', label: 'Datasets', icon: DatabaseIcon },
-              { id: 'profile', label: 'Profile', icon: UserIcon }
-            ].map(m => React.createElement('button', {
-              key: m.id,
-              className: `mobile-nav-btn ${activeNav === m.id ? 'active' : ''}`,
-              onClick: () => handleNavigate(m.id)
-            },
-              React.createElement(m.icon, { size: 18 }),
-              React.createElement('span', null, m.label)
-            ))
-          ),
+          React.createElement(MobileBottomNav, {
+            activeNav,
+            onNavigate: handleNavigate
+          }),
 
           /* MAIN WORKSPACE CONTAINER */
           React.createElement('div', { className: 'app-main-wrapper' },
@@ -35198,7 +35235,7 @@ function InsightIQSettingsView({
                     disabled: isSwitchingRole || !selectedSwitchRole || (
                       selectedSwitchRole === 'admin'
                         ? (activeNav === 'admin')
-                        : (activeNav !== 'admin' && selectedSwitchRole === getCanonicalRole(userProfile?.role || effectiveRole))
+                        : (activeNav !== 'admin' && selectedSwitchRole === getCanonicalRole(userProfile?.workspace_persona || userProfile?.role || effectiveRole))
                     ),
                     onClick: () => {
                       if (selectedSwitchRole === 'admin') {
@@ -35351,7 +35388,7 @@ function InsightIQSettingsView({
               React.createElement('div', { className: 'animate-fade-in', key: `${activeNav}-${effectiveRole}` },
 
                 /* 0. ROUTE AUTHORIZATION GUARD (403 Access Denied) */
-                !can(effectiveRole, ROUTE_PERMISSIONS[activeNav] || 'dashboard.view') && React.createElement(AccessDeniedView, {
+                !((activeNav === 'admin' && (isVerifiedAdmin || userProfile?.role === 'Administrator')) || can(effectiveRole, ROUTE_PERMISSIONS[activeNav] || 'dashboard.view')) && React.createElement(AccessDeniedView, {
                   effectiveRole,
                   activeNav,
                   onReturnToDashboard: () => handleNavigate('overview')

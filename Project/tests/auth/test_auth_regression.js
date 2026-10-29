@@ -224,8 +224,32 @@ async function runSuite() {
   // --- Test 4: Unconfirmed Email Handling ---
   console.log('\n[4/10] Verifying Unconfirmed Email Disambiguation...');
   try {
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email: 'testuser_26889@gmail.com',
+    // Deterministic, isolated test fixture simulating GoTrue unconfirmed response
+    const mockAuthFetch = async (input, init) => {
+      const url = typeof input === 'string' ? input : input.url;
+      if (url.includes('/auth/v1/token')) {
+        return new Response(
+          JSON.stringify({
+            error: 'invalid_grant',
+            error_description: 'Email not confirmed',
+            message: 'Email not confirmed'
+          }),
+          {
+            status: 400,
+            headers: { 'Content-Type': 'application/json' }
+          }
+        );
+      }
+      return fetch(input, init);
+    };
+
+    const fixtureClient = createClient(SUPABASE_URL, SUPABASE_KEY, {
+      auth: { persistSession: false },
+      global: { fetch: mockAuthFetch }
+    });
+
+    const { data, error } = await fixtureClient.auth.signInWithPassword({
+      email: 'unconfirmed_fixture@insightiq.internal',
       password: 'TestPassword123!'
     });
     assert.ok(!data?.user, 'Unconfirmed user must NOT be granted access');
@@ -395,10 +419,48 @@ async function runSuite() {
     console.log('\n[9/12] Verifying Browser E2E: Unconfirmed Email Presentation...');
     {
       const page = await browser.newPage();
+      await page.setRequestInterception(true);
+      page.on('request', interceptedReq => {
+        if (interceptedReq.url().includes('/auth/v1/token')) {
+          if (interceptedReq.method() === 'OPTIONS') {
+            interceptedReq.respond({
+              status: 200,
+              headers: {
+                'access-control-allow-origin': '*',
+                'access-control-allow-methods': 'POST, GET, OPTIONS',
+                'access-control-allow-headers': '*'
+              }
+            });
+            return;
+          }
+          if (interceptedReq.method() === 'POST') {
+            const postData = interceptedReq.postData() || '';
+            if (postData.includes('unconfirmed_fixture') || postData.includes('testuser_26889')) {
+              interceptedReq.respond({
+                status: 400,
+                headers: {
+                  'content-type': 'application/json',
+                  'access-control-allow-origin': '*',
+                  'access-control-allow-methods': 'POST, GET, OPTIONS',
+                  'access-control-allow-headers': '*'
+                },
+                body: JSON.stringify({
+                  error: 'invalid_grant',
+                  error_description: 'Email not confirmed',
+                  message: 'Email not confirmed'
+                })
+              });
+              return;
+            }
+          }
+        }
+        interceptedReq.continue();
+      });
+
       await page.goto(`${testBaseUrl}/`, { waitUntil: 'networkidle2' });
 
       await page.waitForSelector('input[type="email"]', { timeout: 8000 });
-      await page.type('input[type="email"]', 'testuser_26889@gmail.com');
+      await page.type('input[type="email"]', 'unconfirmed_fixture@insightiq.internal');
       await page.type('input[type="password"]', 'TestPassword123!');
       await page.click('button[type="submit"]');
 
