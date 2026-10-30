@@ -23,6 +23,40 @@
 -- - Can be executed repeatedly without errors, policy conflicts, or overwriting newer state.
 -- ============================================================================
 
+BEGIN;
+
+-- ----------------------------------------------------------------------------
+-- 0. PREFLIGHT (fail fast, change nothing, if production drifted from expectations)
+-- ----------------------------------------------------------------------------
+DO $$
+DECLARE
+  v_kind "char";
+BEGIN
+  SELECT c.relkind INTO v_kind
+  FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+  WHERE n.nspname = 'public' AND c.relname = 'projects';
+  IF v_kind IS NOT NULL AND v_kind <> 'v' THEN
+    RAISE EXCEPTION 'Preflight failed: public.projects already exists as relkind "%" (expected absent or a view). Was consolidated_repair_and_remaining_migrations.sql applied?', v_kind;
+  END IF;
+
+  IF to_regclass('public.workspaces') IS NOT NULL AND EXISTS (
+    SELECT 1
+    FROM unnest(ARRAY['owner_id','name','workspace_name','description','category','status','health','health_status',
+                      'health_score','progress','workspace_state','stats','members','dataset_ids','dataset_names',
+                      'milestones','risks','models','is_personal','created_at','updated_at']) AS req(col)
+    WHERE NOT EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'workspaces' AND column_name = req.col
+    )
+  ) THEN
+    RAISE EXCEPTION 'Preflight failed: public.workspaces already exists with a different column set (020_enterprise_collaboration_platform.sql or the repair script?). A dedicated ALTER migration is required first.';
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM public.profiles WHERE id = '051cf8bc-5891-4040-b04d-6954825bdbc2'::uuid) THEN
+    RAISE EXCEPTION 'Preflight failed: seed owner profile 051cf8bc-5891-4040-b04d-6954825bdbc2 not found in public.profiles.';
+  END IF;
+END $$;
+
 -- ----------------------------------------------------------------------------
 -- 1. UTILITY TRIGGERS & SEARCH_PATH HARDENING
 -- ----------------------------------------------------------------------------
@@ -38,7 +72,7 @@ BEGIN
 END;
 $$;
 
-REVOKE EXECUTE ON FUNCTION public.update_timestamp() FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.update_timestamp() FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.update_timestamp() TO authenticated, service_role;
 
 -- ----------------------------------------------------------------------------
@@ -86,7 +120,7 @@ BEGIN
 END;
 $$;
 
-REVOKE EXECUTE ON FUNCTION public.sync_workspace_name_columns() FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.sync_workspace_name_columns() FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.sync_workspace_name_columns() TO authenticated, service_role;
 
 DROP TRIGGER IF EXISTS tr_workspaces_sync_name ON public.workspaces;
@@ -131,6 +165,7 @@ CREATE POLICY "Users can delete own workspaces"
 
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.workspaces TO authenticated;
 GRANT ALL ON public.workspaces TO service_role;
+REVOKE ALL ON public.workspaces FROM anon;
 
 -- ----------------------------------------------------------------------------
 -- 4. PROJECTS VIEW & INSTEAD OF MUTATION HANDLER
@@ -155,6 +190,10 @@ DECLARE
   v_owner_id UUID;
 BEGIN
   v_caller_id := auth.uid();
+  -- Defense in depth: a NULL uid is only acceptable for the trusted service_role.
+  IF v_caller_id IS NULL AND COALESCE(auth.role(), '') <> 'service_role' THEN
+    RAISE EXCEPTION 'Access Denied: authentication required.' USING ERRCODE = '42501';
+  END IF;
 
   IF TG_OP = 'INSERT' THEN
     -- Explicit validation: authenticated caller cannot specify another user's owner_id
@@ -253,7 +292,7 @@ BEGIN
 END;
 $$;
 
-REVOKE EXECUTE ON FUNCTION public.projects_view_mutation_handler() FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.projects_view_mutation_handler() FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.projects_view_mutation_handler() TO authenticated, service_role;
 
 DROP TRIGGER IF EXISTS tr_projects_view_mutation ON public.projects;
@@ -263,6 +302,7 @@ CREATE TRIGGER tr_projects_view_mutation
 
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.projects TO authenticated;
 GRANT ALL ON public.projects TO service_role;
+REVOKE ALL ON public.projects FROM anon;
 
 -- ----------------------------------------------------------------------------
 -- 5. SECURE WORKSPACE UPSERT RPC (Defense-in-depth mutation endpoint)
@@ -281,6 +321,10 @@ DECLARE
   v_result JSONB;
 BEGIN
   v_caller_id := auth.uid();
+  -- Defense in depth: a NULL uid is only acceptable for the trusted service_role.
+  IF v_caller_id IS NULL AND COALESCE(auth.role(), '') <> 'service_role' THEN
+    RAISE EXCEPTION 'Access Denied: authentication required.' USING ERRCODE = '42501';
+  END IF;
   v_id := (workspace_record->>'id')::uuid;
 
   IF v_caller_id IS NULL THEN
@@ -364,7 +408,7 @@ BEGIN
 END;
 $$;
 
-REVOKE EXECUTE ON FUNCTION public.upsert_workspace(JSONB) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.upsert_workspace(JSONB) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.upsert_workspace(JSONB) TO authenticated, service_role;
 
 -- ----------------------------------------------------------------------------
@@ -401,6 +445,36 @@ CREATE POLICY "Users can delete own datasets"
   TO authenticated
   USING (auth.uid() = user_id);
 
+-- Policies required by server.js dataset delete/registration paths. These were present in
+-- 20261030000000 but missing from this consolidated file; included so it is a true superset.
+ALTER TABLE public.dataset_columns ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.dataset_quality ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Users can delete own dataset columns" ON public.dataset_columns;
+CREATE POLICY "Users can delete own dataset columns"
+  ON public.dataset_columns FOR DELETE
+  TO authenticated
+  USING (EXISTS (SELECT 1 FROM public.datasets d WHERE d.id = dataset_columns.dataset_id AND d.user_id = auth.uid()));
+
+DROP POLICY IF EXISTS "Users can insert own dataset quality" ON public.dataset_quality;
+CREATE POLICY "Users can insert own dataset quality"
+  ON public.dataset_quality FOR INSERT
+  TO authenticated
+  WITH CHECK (EXISTS (SELECT 1 FROM public.datasets d WHERE d.id = dataset_quality.dataset_id AND d.user_id = auth.uid()));
+
+DROP POLICY IF EXISTS "Users can update own dataset quality" ON public.dataset_quality;
+CREATE POLICY "Users can update own dataset quality"
+  ON public.dataset_quality FOR UPDATE
+  TO authenticated
+  USING (EXISTS (SELECT 1 FROM public.datasets d WHERE d.id = dataset_quality.dataset_id AND d.user_id = auth.uid()))
+  WITH CHECK (EXISTS (SELECT 1 FROM public.datasets d WHERE d.id = dataset_quality.dataset_id AND d.user_id = auth.uid()));
+
+DROP POLICY IF EXISTS "Users can delete own dataset quality" ON public.dataset_quality;
+CREATE POLICY "Users can delete own dataset quality"
+  ON public.dataset_quality FOR DELETE
+  TO authenticated
+  USING (EXISTS (SELECT 1 FROM public.datasets d WHERE d.id = dataset_quality.dataset_id AND d.user_id = auth.uid()));
+
 -- ----------------------------------------------------------------------------
 -- 7. STORAGE BUCKET HARDENING (TARGETED TO DATASETS BUCKET ONLY)
 -- ----------------------------------------------------------------------------
@@ -426,17 +500,14 @@ VALUES (
 )
 ON CONFLICT (id) DO UPDATE SET
   public = false,
-  file_size_limit = 524288000;
+  file_size_limit = 524288000,
+  allowed_mime_types = EXCLUDED.allowed_mime_types; -- strict superset of the previously deployed list
 
--- Ensure other buckets exist and remain private without modifying their existing policies or MIME configurations
-INSERT INTO storage.buckets (id, name, public)
-VALUES 
-  ('avatars', 'avatars', false),
-  ('reports', 'reports', false),
-  ('exports', 'exports', false),
-  ('models', 'models', false)
-ON CONFLICT (id) DO UPDATE SET
-  public = false;
+-- Never create or re-configure other buckets here (that would drop their size/MIME limits).
+-- Only force EXISTING sibling buckets to private; their objects and policies are untouched.
+UPDATE storage.buckets
+SET public = false
+WHERE id IN ('avatars', 'reports', 'exports', 'models') AND public IS DISTINCT FROM false;
 
 -- Clean up and establish dedicated policies scoped strictly to the 'datasets' bucket.
 -- Existing policies for avatars, reports, exports, and models remain completely untouched.
@@ -563,6 +634,11 @@ VALUES
   '2026-10-29T18:58:38.057Z'::timestamptz
 )
 ON CONFLICT (id) DO NOTHING;
+
+COMMIT;
+
+-- Make PostgREST pick up the new table/view/RPC immediately (outside the transaction).
+NOTIFY pgrst, 'reload schema';
 
 -- ============================================================================
 -- VERIFICATION QUERY (Run this after executing the migration above)
