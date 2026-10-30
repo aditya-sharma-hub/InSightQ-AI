@@ -2200,6 +2200,22 @@ app.post('/api/projects', requireAuthenticatedUser, async (req, res) => {
 
       const effectiveOwnerId = existing ? (existing.owner_id || existing.ownerId) : caller.id;
 
+      // Enforce dataset ownership integrity: reject foreign-owned datasets
+      const candidateDsIds = Array.isArray(item.datasetIds) ? item.datasetIds : (Array.isArray(item.dataset_ids) ? item.dataset_ids : []);
+      for (const dsId of candidateDsIds) {
+        const dsRecord = serverDatasetsRegistry.get(String(dsId).trim());
+        if (dsRecord) {
+          const dsOwner = dsRecord.user_id || dsRecord.ownerId || dsRecord.owner_id;
+          if (dsOwner && String(dsOwner) !== String(effectiveOwnerId) && !caller.isAdmin) {
+            return res.status(403).json({
+              success: false,
+              code: 'DATASET_ACCESS_DENIED',
+              error: `Access Denied: Cannot attach dataset "${dsRecord.name || dsId}" owned by another user.`
+            });
+          }
+        }
+      }
+
       const record = {
         ...existing,
         ...item,
@@ -2312,6 +2328,23 @@ app.put('/api/projects/:id', requireAuthenticatedUser, async (req, res) => {
           code: 'PROJECT_OWNER_IMMUTABLE',
           error: 'Access Denied: Workspace owner cannot be altered.'
         });
+      }
+    }
+
+    // Enforce dataset ownership integrity on PUT
+    const putCandidateDsIds = Array.isArray(body.datasetIds) ? body.datasetIds : (Array.isArray(body.dataset_ids) ? body.dataset_ids : []);
+    const targetOwner = existingProject?.owner_id || existingProject?.ownerId || caller.id;
+    for (const dsId of putCandidateDsIds) {
+      const dsRecord = serverDatasetsRegistry.get(String(dsId).trim());
+      if (dsRecord) {
+        const dsOwner = dsRecord.user_id || dsRecord.ownerId || dsRecord.owner_id;
+        if (dsOwner && String(dsOwner) !== String(targetOwner) && !caller.isAdmin) {
+          return res.status(403).json({
+            success: false,
+            code: 'DATASET_ACCESS_DENIED',
+            error: `Access Denied: Cannot attach dataset "${dsRecord.name || dsId}" owned by another user.`
+          });
+        }
       }
     }
 
@@ -3035,7 +3068,15 @@ app.post('/api/projects/:id/datasets', requireAuthenticatedUser, async (req, res
       const clientDs = suppliedDatasets.find(d => String(d?.id) === dsId);
       const effectiveDs = serverDs || clientDs;
 
-      if (effectiveDs && !isUserAuthorizedForDataset(caller, effectiveDs)) {
+      if (!effectiveDs) {
+        return res.status(404).json({
+          success: false,
+          code: 'DATASET_NOT_FOUND',
+          error: `Dataset "${dsId}" was not found.`
+        });
+      }
+
+      if (!isUserAuthorizedForDataset(caller, effectiveDs)) {
         return res.status(403).json({
           success: false,
           code: 'DATASET_ACCESS_DENIED',
@@ -3043,20 +3084,26 @@ app.post('/api/projects/:id/datasets', requireAuthenticatedUser, async (req, res
         });
       }
 
-      if (effectiveDs) {
-        if (!serverDs) {
-          serverDatasetsRegistry.set(dsId, {
-            ...effectiveDs,
-            id: dsId,
-            user_id: effectiveDs.user_id || effectiveDs.ownerId || caller.id,
-            ownerId: effectiveDs.ownerId || effectiveDs.user_id || caller.id,
-            ownerEmail: (effectiveDs.ownerEmail || caller.email || '').toLowerCase()
-          });
-        }
-        verifiedDatasets.push(serverDatasetsRegistry.get(dsId) || effectiveDs);
-      } else {
-        verifiedDatasets.push({ id: dsId, name: dsId });
+      const targetProjectOwner = existingProject ? (existingProject.owner_id || existingProject.ownerId) : caller.id;
+      const dsOwnerId = effectiveDs.user_id || effectiveDs.ownerId || effectiveDs.owner_id;
+      if (dsOwnerId && targetProjectOwner && String(dsOwnerId) !== String(targetProjectOwner) && !caller.isAdmin) {
+        return res.status(403).json({
+          success: false,
+          code: 'DATASET_ACCESS_DENIED',
+          error: `Access Denied: Dataset "${effectiveDs.name || dsId}" belongs to another user (${dsOwnerId}).`
+        });
       }
+
+      if (!serverDs) {
+        serverDatasetsRegistry.set(dsId, {
+          ...effectiveDs,
+          id: dsId,
+          user_id: effectiveDs.user_id || effectiveDs.ownerId || caller.id,
+          ownerId: effectiveDs.ownerId || effectiveDs.user_id || caller.id,
+          ownerEmail: (effectiveDs.ownerEmail || caller.email || '').toLowerCase()
+        });
+      }
+      verifiedDatasets.push(serverDatasetsRegistry.get(dsId) || effectiveDs);
     }
 
     const baseProject = existingProject || {

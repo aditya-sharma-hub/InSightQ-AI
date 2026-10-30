@@ -55,6 +55,21 @@ BEGIN
   IF NOT EXISTS (SELECT 1 FROM public.profiles WHERE id = '051cf8bc-5891-4040-b04d-6954825bdbc2'::uuid) THEN
     RAISE EXCEPTION 'Preflight failed: seed owner profile 051cf8bc-5891-4040-b04d-6954825bdbc2 not found in public.profiles.';
   END IF;
+
+  -- Verify all 4 required seed datasets exist and are owned by the Data Analyst
+  IF EXISTS (
+    SELECT 1 FROM (
+      VALUES 
+        ('5d9ea772-c07c-4f21-8bcc-bf67eb39b123'::uuid),
+        ('e734d058-bf86-43a2-b884-a0cc2d1efa6c'::uuid),
+        ('ca1298ce-721f-464f-96c0-7e70d88241f1'::uuid),
+        ('36f9e28c-682f-4e8f-986f-445e73850ed5'::uuid)
+    ) AS req(ds_id)
+    LEFT JOIN public.datasets d ON d.id = req.ds_id AND d.user_id = '051cf8bc-5891-4040-b04d-6954825bdbc2'::uuid
+    WHERE d.id IS NULL
+  ) THEN
+    RAISE EXCEPTION 'Preflight failed: One or more required seed datasets do not exist or are not owned by Data Analyst 051cf8bc-5891-4040-b04d-6954825bdbc2.';
+  END IF;
 END $$;
 
 -- ----------------------------------------------------------------------------
@@ -78,9 +93,11 @@ GRANT EXECUTE ON FUNCTION public.update_timestamp() TO authenticated, service_ro
 -- ----------------------------------------------------------------------------
 -- 2. WORKSPACES TABLE (Canonical storage for workspaces & projects)
 -- ----------------------------------------------------------------------------
+-- Note: ON DELETE RESTRICT is strictly enforced on owner_id to prevent accidental
+-- profile deletion or tenant deprovisioning from cascading into irreversible workspace loss.
 CREATE TABLE IF NOT EXISTS public.workspaces (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  owner_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  owner_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE RESTRICT,
   name TEXT NOT NULL,
   workspace_name TEXT,
   description TEXT DEFAULT '',
@@ -102,6 +119,30 @@ CREATE TABLE IF NOT EXISTS public.workspaces (
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Defensive constraint check: if public.workspaces already exists with CASCADE, alter to RESTRICT
+DO $$
+DECLARE
+  v_cname TEXT;
+BEGIN
+  SELECT tc.constraint_name INTO v_cname
+  FROM information_schema.table_constraints tc
+  JOIN information_schema.key_column_usage kcu
+    ON tc.constraint_name = kcu.constraint_name AND tc.table_schema = kcu.table_schema
+  JOIN information_schema.referential_constraints rc
+    ON tc.constraint_name = rc.constraint_name AND tc.table_schema = rc.constraint_schema
+  WHERE tc.table_schema = 'public'
+    AND tc.table_name = 'workspaces'
+    AND kcu.column_name = 'owner_id'
+    AND rc.delete_rule = 'CASCADE';
+
+  IF v_cname IS NOT NULL THEN
+    EXECUTE format('ALTER TABLE public.workspaces DROP CONSTRAINT %I', v_cname);
+    ALTER TABLE public.workspaces
+      ADD CONSTRAINT workspaces_owner_id_fkey
+      FOREIGN KEY (owner_id) REFERENCES public.profiles(id) ON DELETE RESTRICT;
+  END IF;
+END $$;
 
 -- Name synchronization helper trigger (keeps name and workspace_name aligned)
 CREATE OR REPLACE FUNCTION public.sync_workspace_name_columns()
@@ -132,6 +173,61 @@ DROP TRIGGER IF EXISTS tr_workspaces_updated_at ON public.workspaces;
 CREATE TRIGGER tr_workspaces_updated_at
   BEFORE UPDATE ON public.workspaces
   FOR EACH ROW EXECUTE FUNCTION public.update_timestamp();
+
+-- Dataset ownership integrity trigger:
+-- Strictly validates that every dataset ID attached to a workspace exists in public.datasets
+-- and is owned by the workspace's owner_id. Rejects nonexistent or foreign-owned datasets.
+CREATE OR REPLACE FUNCTION public.validate_workspace_dataset_ownership()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = pg_catalog, public
+AS $$
+DECLARE
+  v_ds_id_text TEXT;
+  v_ds_id UUID;
+  v_ds_owner UUID;
+BEGIN
+  IF NEW.dataset_ids IS NULL OR jsonb_array_length(NEW.dataset_ids) = 0 THEN
+    RETURN NEW;
+  END IF;
+
+  FOR v_ds_id_text IN SELECT jsonb_array_elements_text(NEW.dataset_ids)
+  LOOP
+    BEGIN
+      v_ds_id := v_ds_id_text::uuid;
+    EXCEPTION WHEN OTHERS THEN
+      RAISE EXCEPTION 'Access Denied: Invalid dataset ID "%". Must be a valid UUID.', v_ds_id_text
+        USING ERRCODE = '22P02';
+    END;
+
+    SELECT user_id INTO v_ds_owner
+    FROM public.datasets
+    WHERE id = v_ds_id;
+
+    IF v_ds_owner IS NULL THEN
+      RAISE EXCEPTION 'Access Denied: Attached dataset "%" does not exist in public.datasets.', v_ds_id
+        USING ERRCODE = '42501';
+    END IF;
+
+    IF v_ds_owner <> NEW.owner_id THEN
+      RAISE EXCEPTION 'Access Denied: Dataset "%" is owned by another user (dataset_owner=%, workspace_owner=%).',
+        v_ds_id, v_ds_owner, NEW.owner_id
+        USING ERRCODE = '42501';
+    END IF;
+  END LOOP;
+
+  RETURN NEW;
+END;
+$$;
+
+REVOKE EXECUTE ON FUNCTION public.validate_workspace_dataset_ownership() FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.validate_workspace_dataset_ownership() TO authenticated, service_role;
+
+DROP TRIGGER IF EXISTS tr_workspaces_validate_dataset_ownership ON public.workspaces;
+CREATE TRIGGER tr_workspaces_validate_dataset_ownership
+  BEFORE INSERT OR UPDATE ON public.workspaces
+  FOR EACH ROW EXECUTE FUNCTION public.validate_workspace_dataset_ownership();
 
 -- ----------------------------------------------------------------------------
 -- 3. WORKSPACES ROW LEVEL SECURITY (RLS)
@@ -599,7 +695,7 @@ VALUES
   63,
   '{"projectConfigured": true, "datasetAttached": true, "profilingComplete": true, "analyticsComplete": true, "geographicComplete": true, "modelingComplete": false, "reportGenerated": false, "projectFinalized": false}'::jsonb,
   '{"records": "1 Datasets", "models": "0", "milestones": "1 Active"}'::jsonb,
-  '[{"name": "ADITYA SHARMA", "role": "Data Analyst", "email": "123.321aditya@gmail.com", "avatar": "AS", "color": "#38BDF8"}]'::jsonb,
+  '[{"name": "ADITYA SHARMA", "role": "Data Analyst", "user_id": "051cf8bc-5891-4040-b04d-6954825bdbc2", "avatar": "AS", "color": "#38BDF8"}]'::jsonb,
   '["5d9ea772-c07c-4f21-8bcc-bf67eb39b123"]'::jsonb,
   '["DataCoSupplyChainDataset"]'::jsonb,
   '[{"id": "m_dabe7fd6-f4cb-48ed-8c97-5797dd08a9d0_1", "title": "Project Inception & Baseline Ingestion", "owner": "ADITYA SHARMA", "status": "Completed", "progress": 100}]'::jsonb,
@@ -623,7 +719,7 @@ VALUES
   100,
   '{"projectConfigured": true, "datasetAttached": true, "profilingComplete": true, "analyticsComplete": true, "geographicComplete": false, "modelingComplete": true, "reportGenerated": true, "projectFinalized": true}'::jsonb,
   '{"records": "3 Datasets", "models": "0", "milestones": "1 Active"}'::jsonb,
-  '[{"name": "ADITYA SHARMA", "role": "Data Analyst", "email": "123.321aditya@gmail.com", "avatar": "AS", "color": "#38BDF8"}]'::jsonb,
+  '[{"name": "ADITYA SHARMA", "role": "Data Analyst", "user_id": "051cf8bc-5891-4040-b04d-6954825bdbc2", "avatar": "AS", "color": "#38BDF8"}]'::jsonb,
   '["e734d058-bf86-43a2-b884-a0cc2d1efa6c", "ca1298ce-721f-464f-96c0-7e70d88241f1", "36f9e28c-682f-4e8f-986f-445e73850ed5"]'::jsonb,
   '["sample_submission", "test_identity", "train_identity"]'::jsonb,
   '[{"id": "m_d498e262-fb3d-4b69-8c80-c554e5624f8e_1", "title": "Project Inception & Baseline Ingestion", "owner": "ADITYA SHARMA", "status": "Completed", "progress": 100}]'::jsonb,

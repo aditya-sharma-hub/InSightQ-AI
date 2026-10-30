@@ -33,32 +33,32 @@ async function migrateProjects(options = {}) {
   const supabaseKey = envContent.match(/VITE_SUPABASE_ANON_KEY=(.+)/)[1].trim();
   const rootSupabase = createClient(supabaseUrl, supabaseKey);
 
-  // Authenticate user
-  let token = options.accessToken;
-  let userId = options.userId;
-  let userEmail = options.email;
+  // Authenticate user safely via options, environment variables, or CLI arguments
+  let token = options.accessToken || process.env.SUPABASE_ACCESS_TOKEN || null;
+  let userId = options.userId || process.env.SUPABASE_USER_ID || null;
+  let userEmail = options.email || null;
+
+  for (let i = 2; i < process.argv.length; i++) {
+    if (process.argv[i] === '--token' && process.argv[i + 1]) {
+      token = process.argv[i + 1];
+    }
+  }
 
   if (!token) {
-    const logPath = path.resolve(__dirname, '../data/local_browser_backup/chrome_local_storage_leveldb/001174.log');
-    if (!fs.existsSync(logPath)) {
-      throw new Error('Browser backup log not found for session authentication at ' + logPath);
-    }
-    const logContent = fs.readFileSync(logPath, 'utf8');
-    const refreshMatch = logContent.match(/"refresh_token":"([^"]+)"/);
-    if (!refreshMatch) {
-      throw new Error('Could not find refresh_token in browser log.');
-    }
+    throw new Error('Authentication required: Please provide a valid short-lived access token via SUPABASE_ACCESS_TOKEN or --token flag. Browser log scraping is disabled.');
+  }
 
-    console.log('[Auth] Refreshing user session with Supabase...');
-    const { data: sessionData, error: refreshErr } = await rootSupabase.auth.refreshSession({
-      refresh_token: refreshMatch[1]
+  if (!userId) {
+    const authClient = createClient(supabaseUrl, supabaseKey, {
+      auth: { persistSession: false },
+      global: { headers: { Authorization: `Bearer ${token}` } }
     });
-    if (refreshErr || !sessionData?.session) {
-      throw new Error(`Failed to refresh session: ${refreshErr ? refreshErr.message : 'No session'}`);
+    const { data: userData, error: uErr } = await authClient.auth.getUser(token);
+    if (uErr || !userData?.user) {
+      throw new Error(`Authentication token invalid: ${uErr ? uErr.message : 'Unknown user'}`);
     }
-    token = sessionData.session.access_token;
-    userId = sessionData.session.user.id;
-    userEmail = sessionData.session.user.email;
+    userId = userData.user.id;
+    userEmail = userData.user.email;
   }
 
   console.log(`[Auth] Authenticated as User: ${userId} (${userEmail})\n`);
