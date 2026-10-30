@@ -16,6 +16,10 @@ const path = require('path');
 const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
+let AdmZip = null;
+try {
+  AdmZip = require('adm-zip');
+} catch (_) {}
 
 // Load environment variables from .env.local first, then .env (checking both current directory and parent workspace root)
 dotenv.config({ path: path.join(__dirname, '.env.local') });
@@ -1878,6 +1882,117 @@ const requireAuthenticatedUser = async (req, res, next) => {
 /**
  * Helper to check if req.authUser is the project owner or an authorized administrator.
  */
+/**
+ * Helper to get an authenticated Supabase client scoped to caller's JWT.
+ */
+const getUserScopedSupabaseClient = (caller) => {
+  const supabaseUrl = resolveSupabaseUrl();
+  const supabaseKey = resolveSupabaseKey();
+  if (!supabaseUrl || !supabaseKey || !caller || !caller.token || caller.isMock) {
+    return null;
+  }
+  return createClient(supabaseUrl, supabaseKey, {
+    auth: { persistSession: false },
+    global: { headers: { Authorization: `Bearer ${caller.token}` } }
+  });
+};
+
+/**
+ * Synchronize projects array to user's storage backup in Supabase storage bucket 'datasets'.
+ * Path: {callerId}/meta/projects.json
+ */
+const syncProjectsToUserStorage = async (userClient, callerId, projectsList) => {
+  if (!userClient || !callerId || !Array.isArray(projectsList)) return;
+  try {
+    const payload = JSON.stringify(projectsList);
+    const buffer = Buffer.from(payload, 'utf8');
+    await userClient.storage.from('datasets').upload(
+      `${callerId}/meta/projects.json`,
+      buffer,
+      { contentType: 'application/json', upsert: true }
+    );
+  } catch (err) {
+    console.warn('[Storage Project Sync Warning]', err.message);
+  }
+};
+
+/**
+ * Read projects array from user's storage backup in Supabase storage bucket 'datasets'.
+ */
+const readProjectsFromUserStorage = async (userClient, callerId) => {
+  if (!userClient || !callerId) return [];
+  try {
+    const { data: blob, error } = await userClient.storage.from('datasets').download(`${callerId}/meta/projects.json`);
+    if (error || !blob) return [];
+    const text = await blob.text();
+    const parsed = JSON.parse(text);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (_) {
+    return [];
+  }
+};
+
+/**
+ * Persist an updated project to both PostgreSQL workspaces (if table exists)
+ * and the user's durable Supabase Storage backup ({callerId}/meta/projects.json).
+ */
+const persistProjectState = async (caller, projectRecord) => {
+  if (!caller || !projectRecord) return;
+  const userClient = getUserScopedSupabaseClient(caller);
+  if (!userClient) return;
+
+  const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(projectRecord.id);
+  if (isUUID) {
+    try {
+      const effectiveOwnerId = (caller.isAdmin && (projectRecord.owner_id || projectRecord.ownerId))
+        ? (projectRecord.owner_id || projectRecord.ownerId)
+        : caller.id;
+
+      await userClient.from('workspaces').upsert({
+        id: projectRecord.id,
+        owner_id: effectiveOwnerId,
+        name: projectRecord.name,
+        workspace_name: projectRecord.name,
+        description: projectRecord.description || '',
+        category: projectRecord.category || 'General Analytics',
+        status: projectRecord.status || 'active',
+        health: projectRecord.health || 'On Track',
+        health_status: projectRecord.healthStatus || 'ontrack',
+        health_score: projectRecord.health_score ?? 100,
+        progress: projectRecord.progress ?? 0,
+        workspace_state: projectRecord.workspaceState || {},
+        stats: projectRecord.stats || {},
+        members: projectRecord.members || [],
+        dataset_ids: projectRecord.datasetIds || [],
+        dataset_names: projectRecord.datasetNames || [],
+        milestones: projectRecord.milestones || [],
+        risks: projectRecord.risks || [],
+        models: projectRecord.models || [],
+        updated_at: projectRecord.updatedAt || new Date().toISOString()
+      }, { onConflict: 'id' });
+    } catch (wsErr) {
+      console.warn('[persistProjectState DB Notice]', wsErr.message);
+    }
+  }
+
+  try {
+    const existingCloud = await readProjectsFromUserStorage(userClient, caller.id);
+    const projectMap = new Map();
+    for (const cp of existingCloud) {
+      if (cp && cp.id && !serverDeletedProjectIds.has(cp.id)) projectMap.set(cp.id, cp);
+    }
+    for (const [id, p] of serverProjectsRegistry.entries()) {
+      if (!serverDeletedProjectIds.has(id) && isUserAuthorizedForProject(caller, p)) {
+        projectMap.set(id, p);
+      }
+    }
+    projectMap.set(projectRecord.id, projectRecord);
+    await syncProjectsToUserStorage(userClient, caller.id, Array.from(projectMap.values()));
+  } catch (err) {
+    console.warn('[persistProjectState Storage Sync Notice]', err.message);
+  }
+};
+
 const isUserAuthorizedForProject = (authUser, project) => {
   if (!authUser || !project) return false;
   if (authUser.isAdmin) return true;
@@ -1894,6 +2009,101 @@ const isUserAuthorizedForProject = (authUser, project) => {
 app.get('/api/projects', requireAuthenticatedUser, async (req, res) => {
   try {
     const caller = req.authUser;
+    const userClient = getUserScopedSupabaseClient(caller);
+    let remoteProjects = [];
+
+    if (userClient) {
+      // 1. First attempt to load from public.workspaces table
+      try {
+        let wsQuery = userClient.from('workspaces').select('*').order('created_at', { ascending: false });
+        if (!caller.isAdmin) {
+          wsQuery = wsQuery.eq('owner_id', caller.id);
+        }
+        const { data: wsData, error: wsErr } = await wsQuery;
+        if (!wsErr && Array.isArray(wsData) && wsData.length > 0) {
+          remoteProjects = wsData.map(ws => ({
+            id: ws.id,
+            name: ws.name || ws.workspace_name,
+            description: ws.description || '',
+            category: ws.category || 'General Analytics',
+            status: ws.status || 'active',
+            health: ws.health || 'On Track',
+            healthStatus: ws.health_status || 'ontrack',
+            health_score: ws.health_score ?? 100,
+            progress: ws.progress ?? 0,
+            workspaceState: ws.workspace_state || {},
+            stats: ws.stats || {},
+            datasetIds: Array.isArray(ws.dataset_ids) ? ws.dataset_ids : [],
+            datasetNames: Array.isArray(ws.dataset_names) ? ws.dataset_names : [],
+            members: Array.isArray(ws.members) ? ws.members : [],
+            milestones: Array.isArray(ws.milestones) ? ws.milestones : [],
+            models: Array.isArray(ws.models) ? ws.models : [],
+            risks: Array.isArray(ws.risks) ? ws.risks : [],
+            ownerId: ws.owner_id,
+            owner_id: ws.owner_id,
+            ownerEmail: caller.email,
+            owner: caller.fullName,
+            createdAt: ws.created_at,
+            updatedAt: ws.updated_at
+          }));
+        }
+      } catch (_) {}
+
+      // 2. If workspaces table is not yet migrated in Supabase (or empty), fallback to storage backup
+      if (remoteProjects.length === 0) {
+        const storageBackupProjects = await readProjectsFromUserStorage(userClient, caller.id);
+        if (storageBackupProjects.length > 0) {
+          remoteProjects = storageBackupProjects;
+          // Auto-migrate storage backup to workspaces table idempotently
+          for (const sp of storageBackupProjects) {
+            if (sp && sp.id) {
+              const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(sp.id);
+              if (isUUID) {
+                try {
+                  await userClient.from('workspaces').upsert({
+                    id: sp.id,
+                    owner_id: sp.owner_id || sp.ownerId || caller.id,
+                    name: sp.name,
+                    workspace_name: sp.name,
+                    description: sp.description || '',
+                    category: sp.category || 'General Analytics',
+                    status: sp.status || 'active',
+                    health: sp.health || 'On Track',
+                    health_status: sp.healthStatus || 'ontrack',
+                    health_score: sp.health_score ?? 100,
+                    progress: sp.progress ?? 0,
+                    workspace_state: sp.workspaceState || {},
+                    stats: sp.stats || {},
+                    members: sp.members || [],
+                    dataset_ids: sp.datasetIds || [],
+                    dataset_names: sp.datasetNames || [],
+                    milestones: sp.milestones || [],
+                    risks: sp.risks || [],
+                    models: sp.models || [],
+                    created_at: sp.createdAt || new Date().toISOString(),
+                    updated_at: sp.updatedAt || new Date().toISOString()
+                  }, { onConflict: 'id' });
+                } catch (migrateErr) {
+                  console.warn('[Auto-migration of projects.json to workspaces notice]', migrateErr.message);
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // Merge remote projects into serverProjectsRegistry so in-memory cache is hydrated
+    for (const rp of remoteProjects) {
+      if (rp && rp.id && !serverDeletedProjectIds.has(rp.id)) {
+        const existing = serverProjectsRegistry.get(rp.id);
+        serverProjectsRegistry.set(rp.id, {
+          ...existing,
+          ...rp
+        });
+      }
+    }
+
     const projects = [];
     for (const [id, proj] of serverProjectsRegistry.entries()) {
       if (serverDeletedProjectIds.has(id)) continue;
@@ -1922,6 +2132,7 @@ app.post('/api/projects', requireAuthenticatedUser, async (req, res) => {
   try {
     const caller = req.authUser;
     const body = req.body || {};
+    const userClient = getUserScopedSupabaseClient(caller);
 
     // Support batch sync or single project registration
     const incomingList = Array.isArray(body.projects) ? body.projects : (body.project ? [body.project] : (body.name ? [body] : []));
@@ -1933,32 +2144,70 @@ app.post('/api/projects', requireAuthenticatedUser, async (req, res) => {
       });
     }
 
+    // Ensure existing user projects from cloud storage are loaded into memory first so we don't overwrite them
+    if (userClient) {
+      const existingCloudProjects = await readProjectsFromUserStorage(userClient, caller.id);
+      for (const cp of existingCloudProjects) {
+        if (cp && cp.id && !serverDeletedProjectIds.has(cp.id) && !serverProjectsRegistry.has(cp.id)) {
+          serverProjectsRegistry.set(cp.id, cp);
+        }
+      }
+    }
+
     const savedProjects = [];
     for (const item of incomingList) {
       const projName = String(item.name || '').trim();
       if (!projName) continue;
-      const projId = String(item.id || `proj-${Date.now()}`).trim();
+      const projId = String(item.id || crypto.randomUUID()).trim();
 
       if (serverDeletedProjectIds.has(projId) && !body.forceRestore) {
         continue;
       }
 
-      const existing = serverProjectsRegistry.get(projId);
-      if (existing && !isUserAuthorizedForProject(caller, existing)) {
-        return res.status(403).json({
-          success: false,
-          code: 'PROJECT_ACCESS_DENIED',
-          error: 'Access Denied: You cannot overwrite a project owned by another user.'
-        });
+      // Enforce caller cannot specify or hijack another user's owner_id
+      if (!caller.isAdmin && (item.ownerId || item.owner_id)) {
+        const attemptedOwner = String(item.ownerId || item.owner_id);
+        if (attemptedOwner !== String(caller.id)) {
+          return res.status(403).json({
+            success: false,
+            code: 'PROJECT_ACCESS_DENIED',
+            error: 'Access Denied: You cannot create or modify a workspace owned by another user.'
+          });
+        }
       }
+
+      const existing = serverProjectsRegistry.get(projId);
+      if (existing) {
+        if (!isUserAuthorizedForProject(caller, existing)) {
+          return res.status(403).json({
+            success: false,
+            code: 'PROJECT_ACCESS_DENIED',
+            error: 'Access Denied: You cannot overwrite a project owned by another user.'
+          });
+        }
+        if (!caller.isAdmin && (item.ownerId || item.owner_id)) {
+          const attemptedOwner = String(item.ownerId || item.owner_id);
+          const currentOwner = String(existing.owner_id || existing.ownerId);
+          if (attemptedOwner !== currentOwner) {
+            return res.status(403).json({
+              success: false,
+              code: 'PROJECT_OWNER_IMMUTABLE',
+              error: 'Access Denied: Workspace owner cannot be altered.'
+            });
+          }
+        }
+      }
+
+      const effectiveOwnerId = existing ? (existing.owner_id || existing.ownerId) : caller.id;
 
       const record = {
         ...existing,
         ...item,
         id: projId,
         name: projName,
-        ownerId: existing?.ownerId || item.ownerId || item.owner_id || caller.id,
-        owner_id: existing?.owner_id || item.owner_id || item.ownerId || caller.id,
+        workspace_name: projName,
+        ownerId: effectiveOwnerId,
+        owner_id: effectiveOwnerId,
         ownerEmail: (existing?.ownerEmail || item.ownerEmail || caller.email || '').toLowerCase(),
         owner: existing?.owner || item.owner || caller.fullName,
         ownerRole: existing?.ownerRole || item.ownerRole || caller.role,
@@ -1968,6 +2217,50 @@ app.post('/api/projects', requireAuthenticatedUser, async (req, res) => {
 
       serverProjectsRegistry.set(projId, record);
       savedProjects.push(record);
+
+      // Persist to Supabase workspaces table if valid UUID and client available
+      if (userClient) {
+        const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(projId);
+        if (isUUID) {
+          try {
+            await userClient.from('workspaces').upsert({
+              id: projId,
+              owner_id: record.owner_id,
+              name: record.name,
+              workspace_name: record.name,
+              description: record.description || '',
+              category: record.category || 'General Analytics',
+              status: record.status || 'active',
+              health: record.health || 'On Track',
+              health_status: record.healthStatus || 'ontrack',
+              health_score: record.health_score ?? 100,
+              progress: record.progress ?? 0,
+              workspace_state: record.workspaceState || {},
+              stats: record.stats || {},
+              members: record.members || [],
+              dataset_ids: record.datasetIds || [],
+              dataset_names: record.datasetNames || [],
+              milestones: record.milestones || [],
+              risks: record.risks || [],
+              models: record.models || [],
+              updated_at: record.updatedAt
+            }, { onConflict: 'id' });
+          } catch (wsErr) {
+            console.warn('[Workspaces Table Upsert Notice]', wsErr.message);
+          }
+        }
+      }
+    }
+
+    // Persist all user's active projects to user's storage backup
+    if (userClient) {
+      const userAllProjects = [];
+      for (const [id, p] of serverProjectsRegistry.entries()) {
+        if (!serverDeletedProjectIds.has(id) && isUserAuthorizedForProject(caller, p)) {
+          userAllProjects.push(p);
+        }
+      }
+      await syncProjectsToUserStorage(userClient, caller.id, userAllProjects);
     }
 
     return res.status(201).json({
@@ -1979,6 +2272,71 @@ app.post('/api/projects', requireAuthenticatedUser, async (req, res) => {
     return res.status(500).json({
       success: false,
       error: `Failed to register project: ${err.message}`
+    });
+  }
+});
+
+/**
+ * PUT /api/projects/:id
+ * Updates an existing workspace. Strictly verifies ownership and prevents unauthorized owner change.
+ */
+app.put('/api/projects/:id', requireAuthenticatedUser, async (req, res) => {
+  try {
+    const caller = req.authUser;
+    const projectId = String(req.params.id || '').trim();
+    const body = req.body || {};
+
+    if (!projectId) {
+      return res.status(400).json({
+        success: false,
+        code: 'PROJECT_ID_REQUIRED',
+        error: 'Project ID is required.'
+      });
+    }
+
+    const existingProject = serverProjectsRegistry.get(projectId);
+    if (existingProject && !isUserAuthorizedForProject(caller, existingProject)) {
+      return res.status(403).json({
+        success: false,
+        code: 'PROJECT_ACCESS_DENIED',
+        error: 'Access Denied: You do not have permission to modify this workspace.'
+      });
+    }
+
+    if (!caller.isAdmin && (body.ownerId || body.owner_id)) {
+      const attemptedOwner = String(body.ownerId || body.owner_id);
+      const currentOwner = String(existingProject?.owner_id || existingProject?.ownerId || caller.id);
+      if (attemptedOwner !== currentOwner) {
+        return res.status(403).json({
+          success: false,
+          code: 'PROJECT_OWNER_IMMUTABLE',
+          error: 'Access Denied: Workspace owner cannot be altered.'
+        });
+      }
+    }
+
+    const updated = {
+      ...(existingProject || {}),
+      ...body,
+      id: projectId,
+      name: body.name || existingProject?.name || 'Untitled Project',
+      workspace_name: body.name || existingProject?.name || 'Untitled Project',
+      owner_id: existingProject?.owner_id || caller.id,
+      ownerId: existingProject?.ownerId || caller.id,
+      updatedAt: new Date().toISOString()
+    };
+
+    serverProjectsRegistry.set(projectId, updated);
+    await persistProjectState(caller, updated);
+
+    return res.status(200).json({
+      success: true,
+      project: updated
+    });
+  } catch (err) {
+    return res.status(500).json({
+      success: false,
+      error: `Failed to update project: ${err.message}`
     });
   }
 });
@@ -2107,6 +2465,20 @@ app.delete('/api/projects/:id', requireAuthenticatedUser, async (req, res) => {
       }
     }
 
+    // Persist deletion to user's storage backup ({caller.id}/meta/projects.json)
+    const delUserClient = getUserScopedSupabaseClient(caller);
+    if (delUserClient) {
+      try {
+        const existingCloud = await readProjectsFromUserStorage(delUserClient, caller.id);
+        const remainingCloud = existingCloud.filter(p => p && p.id !== projectId);
+        await syncProjectsToUserStorage(delUserClient, caller.id, remainingCloud);
+      } catch (storageDelErr) {
+        console.warn('[Project Delete Storage Notice]', storageDelErr.message);
+      }
+    }
+
+
+
     return res.status(200).json({
       success: true,
       deletedProjectId: projectId,
@@ -2159,6 +2531,48 @@ const isUserAuthorizedForDataset = (authUser, dataset) => {
 app.get('/api/datasets', requireAuthenticatedUser, async (req, res) => {
   try {
     const caller = req.authUser;
+    const userClient = getUserScopedSupabaseClient(caller);
+    let remoteDatasets = [];
+
+    if (userClient) {
+      try {
+        let q = userClient.from('datasets').select('*').order('created_at', { ascending: false });
+        if (!caller.isAdmin) {
+          q = q.eq('user_id', caller.id);
+        }
+        const { data, error } = await q;
+        if (!error && Array.isArray(data)) {
+          remoteDatasets = data.map(d => ({
+            id: d.id,
+            name: d.name,
+            original_filename: d.original_filename,
+            storage_path: d.storage_path,
+            file_type: d.file_type,
+            file_size: Number(d.file_size || 0),
+            row_count: Number(d.row_count || 0),
+            column_count: Number(d.column_count || 0),
+            status: d.status || 'active',
+            upload_source: d.upload_source || 'manual_upload',
+            user_id: d.user_id,
+            ownerId: d.user_id,
+            ownerEmail: caller.email,
+            created_at: d.created_at,
+            updated_at: d.updated_at
+          }));
+        }
+      } catch (qErr) {
+        console.warn('[Datasets Query Notice]', qErr.message);
+      }
+    }
+
+    // Hydrate in-memory registry with remote datasets
+    for (const rds of remoteDatasets) {
+      if (rds && rds.id) {
+        const existing = serverDatasetsRegistry.get(rds.id);
+        serverDatasetsRegistry.set(rds.id, { ...existing, ...rds });
+      }
+    }
+
     const datasets = [];
     for (const [, ds] of serverDatasetsRegistry.entries()) {
       if (isUserAuthorizedForDataset(caller, ds)) {
@@ -2185,6 +2599,7 @@ app.post('/api/datasets/register', requireAuthenticatedUser, async (req, res) =>
   try {
     const caller = req.authUser;
     const body = req.body || {};
+    const userClient = getUserScopedSupabaseClient(caller);
     const incomingList = Array.isArray(body.datasets) ? body.datasets : (body.dataset ? [body.dataset] : (body.id ? [body] : []));
     if (incomingList.length === 0) {
       return res.status(400).json({
@@ -2196,7 +2611,7 @@ app.post('/api/datasets/register', requireAuthenticatedUser, async (req, res) =>
 
     const registered = [];
     for (const item of incomingList) {
-      const dsId = String(item.id || `ds_${Date.now()}`).trim();
+      const dsId = String(item.id || crypto.randomUUID()).trim();
       const existing = serverDatasetsRegistry.get(dsId);
       if (existing && !isUserAuthorizedForDataset(caller, existing)) {
         return res.status(403).json({
@@ -2217,6 +2632,31 @@ app.post('/api/datasets/register', requireAuthenticatedUser, async (req, res) =>
       };
       serverDatasetsRegistry.set(dsId, record);
       registered.push(record);
+
+      // Persist to Supabase datasets table if valid UUID and client available
+      if (userClient) {
+        const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(dsId);
+        if (isUUID) {
+          try {
+            await userClient.from('datasets').upsert({
+              id: dsId,
+              user_id: record.user_id,
+              name: record.name || record.original_filename || 'Dataset',
+              original_filename: record.original_filename || record.name || 'data.csv',
+              storage_path: record.storage_path || `${record.user_id}/${dsId}/${record.original_filename || 'data.csv'}`,
+              file_type: (record.file_type || 'CSV').toUpperCase(),
+              file_size: Number(record.file_size || 0),
+              row_count: Number(record.row_count || 0),
+              column_count: Number(record.column_count || 0),
+              status: record.status || 'active',
+              upload_source: record.upload_source || 'manual_upload',
+              updated_at: new Date().toISOString()
+            }, { onConflict: 'id' });
+          } catch (dbErr) {
+            console.warn('[Dataset DB Upsert Notice]', dbErr.message);
+          }
+        }
+      }
     }
 
     return res.status(201).json({
@@ -2229,6 +2669,312 @@ app.post('/api/datasets/register', requireAuthenticatedUser, async (req, res) =>
       success: false,
       error: `Failed to register dataset: ${err.message}`
     });
+  }
+});
+
+/**
+ * POST /api/datasets/upload
+ * Multi-part upload endpoint that stores original file in Supabase Storage under {userId}/{datasetId}/{filename}
+ * and atomically persists dataset metadata in PostgreSQL datasets table.
+ * If storage upload fails, reports failure without DB record.
+ * If DB insert fails, cleans up the uploaded file from storage (rollback).
+ */
+app.post('/api/datasets/upload', requireAuthenticatedUser, handleUpload, async (req, res) => {
+  try {
+    const caller = req.authUser;
+    const file = req.file;
+    if (!file) {
+      return res.status(400).json({
+        success: false,
+        code: 'FILE_REQUIRED',
+        error: 'No file was provided for upload.'
+      });
+    }
+
+    const dsId = String(req.body.id || req.body.datasetId || crypto.randomUUID()).trim();
+    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(dsId);
+    const validId = isUUID ? dsId : crypto.randomUUID();
+
+    const originalFilename = file.originalname || 'dataset.csv';
+    const ext = path.extname(originalFilename).replace('.', '').toLowerCase();
+    const datasetName = (req.body.name || req.body.datasetName || originalFilename).trim();
+    const fileType = (req.body.file_type || ext || 'CSV').toUpperCase();
+    const mimeType = file.mimetype || (
+      ext === 'csv' ? 'text/csv' :
+      ext === 'json' ? 'application/json' :
+      ext === 'xlsx' ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' :
+      ext === 'xls' ? 'application/vnd.ms-excel' :
+      'application/octet-stream'
+    );
+    const storagePath = `${caller.id}/${validId}/${originalFilename}`;
+
+    const userClient = getUserScopedSupabaseClient(caller);
+    let storageUploaded = false;
+
+    // 1. Upload to Supabase Storage if user client is available
+    if (userClient) {
+      const { data: storageData, error: storageErr } = await userClient.storage
+        .from('datasets')
+        .upload(storagePath, file.buffer, {
+          contentType: mimeType,
+          upsert: true
+        });
+
+      if (storageErr) {
+        return res.status(500).json({
+          success: false,
+          code: 'STORAGE_UPLOAD_FAILED',
+          error: `Supabase Storage upload failed: ${storageErr.message}`
+        });
+      }
+      storageUploaded = true;
+    }
+
+    // 2. Persist record in PostgreSQL datasets table
+    const datasetRecord = {
+      id: validId,
+      user_id: caller.id,
+      name: datasetName,
+      original_filename: originalFilename,
+      storage_path: storagePath,
+      file_type: fileType,
+      mime_type: mimeType,
+      file_size: file.size,
+      row_count: Number(req.body.row_count || 0),
+      column_count: Number(req.body.column_count || 0),
+      status: 'active',
+      processing_status: 'ready',
+      upload_source: 'manual_upload',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      ownerId: caller.id,
+      ownerEmail: caller.email
+    };
+
+    if (userClient) {
+      try {
+        const { error: dbErr } = await userClient.from('datasets').upsert({
+          id: validId,
+          user_id: caller.id,
+          name: datasetName,
+          original_filename: originalFilename,
+          storage_path: storagePath,
+          file_type: fileType,
+          file_size: file.size,
+          row_count: datasetRecord.row_count,
+          column_count: datasetRecord.column_count,
+          status: 'active',
+          upload_source: 'manual_upload',
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'id' });
+
+        if (dbErr) {
+          // Rollback: clean up uploaded storage file on DB failure
+          if (storageUploaded) {
+            await userClient.storage.from('datasets').remove([storagePath]).catch(() => {});
+          }
+          return res.status(500).json({
+            success: false,
+            code: 'DATABASE_PERSISTENCE_FAILED',
+            error: `Database persistence failed: ${dbErr.message}`
+          });
+        }
+      } catch (dbEx) {
+        if (storageUploaded) {
+          await userClient.storage.from('datasets').remove([storagePath]).catch(() => {});
+        }
+        return res.status(500).json({
+          success: false,
+          code: 'DATABASE_PERSISTENCE_FAILED',
+          error: `Database persistence failed: ${dbEx.message}`
+        });
+      }
+    }
+
+    // 3. Register in in-memory registry
+    serverDatasetsRegistry.set(validId, datasetRecord);
+
+    return res.status(201).json({
+      success: true,
+      dataset: datasetRecord
+    });
+  } catch (err) {
+    return res.status(500).json({
+      success: false,
+      code: 'UPLOAD_FAILED',
+      error: `Failed to process upload: ${err.message}`
+    });
+  }
+});
+
+/**
+ * GET /api/datasets/:id/download-url
+ * Generates a signed URL for an authorized user to securely download their dataset from Supabase Storage.
+ * Never exposes sensitive datasets publicly.
+ */
+app.get('/api/datasets/:id/download-url', requireAuthenticatedUser, async (req, res) => {
+  try {
+    const caller = req.authUser;
+    const dsId = String(req.params.id || '').trim();
+    if (!dsId) {
+      return res.status(400).json({ success: false, code: 'DATASET_ID_REQUIRED', error: 'Dataset ID is required.' });
+    }
+
+    let targetRecord = serverDatasetsRegistry.get(dsId);
+    const userClient = getUserScopedSupabaseClient(caller);
+
+    if (!targetRecord && userClient) {
+      const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(dsId);
+      if (isUUID) {
+        try {
+          const { data } = await userClient.from('datasets').select('*').eq('id', dsId).maybeSingle();
+          if (data) {
+            targetRecord = {
+              ...data,
+              ownerId: data.user_id,
+              ownerEmail: caller.email
+            };
+          }
+        } catch (_) {}
+      }
+    }
+
+    if (!targetRecord) {
+      return res.status(404).json({ success: false, code: 'DATASET_NOT_FOUND', error: `Dataset "${dsId}" not found.` });
+    }
+
+    if (!isUserAuthorizedForDataset(caller, targetRecord)) {
+      return res.status(403).json({
+        success: false,
+        code: 'DATASET_ACCESS_DENIED',
+        error: 'Access Denied: You do not have permission to download this dataset.'
+      });
+    }
+
+    const storagePath = targetRecord.storage_path || `${targetRecord.user_id || caller.id}/${dsId}/${targetRecord.original_filename || 'data.csv'}`;
+
+    if (userClient) {
+      const expiresInSeconds = 300; // 5 minutes
+      const { data: signedData, error: signErr } = await userClient.storage
+        .from('datasets')
+        .createSignedUrl(storagePath, expiresInSeconds);
+
+      if (signErr) {
+        return res.status(500).json({
+          success: false,
+          code: 'SIGNED_URL_FAILED',
+          error: `Failed to generate signed download URL: ${signErr.message}`
+        });
+      }
+
+      return res.json({
+        success: true,
+        signedUrl: signedData.signedUrl,
+        expiresIn: expiresInSeconds,
+        dataset: {
+          id: targetRecord.id,
+          name: targetRecord.name,
+          original_filename: targetRecord.original_filename,
+          file_type: targetRecord.file_type,
+          file_size: targetRecord.file_size
+        }
+      });
+    }
+
+    return res.status(400).json({
+      success: false,
+      code: 'STORAGE_CLIENT_UNAVAILABLE',
+      error: 'Supabase storage is not configured or authenticated.'
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, error: `Download URL generation failed: ${err.message}` });
+  }
+});
+
+/**
+ * GET /api/datasets/:id/download
+ * Performs an authenticated download stream directly from Supabase Storage for authorized users.
+ */
+app.get('/api/datasets/:id/download', requireAuthenticatedUser, async (req, res) => {
+  try {
+    const caller = req.authUser;
+    const dsId = String(req.params.id || '').trim();
+    if (!dsId) {
+      return res.status(400).json({ success: false, code: 'DATASET_ID_REQUIRED', error: 'Dataset ID is required.' });
+    }
+
+    let targetRecord = serverDatasetsRegistry.get(dsId);
+    const userClient = getUserScopedSupabaseClient(caller);
+
+    if (!targetRecord && userClient) {
+      const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(dsId);
+      if (isUUID) {
+        try {
+          const { data } = await userClient.from('datasets').select('*').eq('id', dsId).maybeSingle();
+          if (data) targetRecord = { ...data, ownerId: data.user_id, ownerEmail: caller.email };
+        } catch (_) {}
+      }
+    }
+
+    if (!targetRecord) {
+      return res.status(404).json({ success: false, code: 'DATASET_NOT_FOUND', error: `Dataset "${dsId}" not found.` });
+    }
+
+    if (!isUserAuthorizedForDataset(caller, targetRecord)) {
+      return res.status(403).json({
+        success: false,
+        code: 'DATASET_ACCESS_DENIED',
+        error: 'Access Denied: You do not have permission to download this dataset.'
+      });
+    }
+
+    const storagePath = targetRecord.storage_path || `${targetRecord.user_id || caller.id}/${dsId}/${targetRecord.original_filename || 'data.csv'}`;
+
+    if (userClient) {
+      const { data: blob, error: dlErr } = await userClient.storage.from('datasets').download(storagePath);
+      if (dlErr || !blob) {
+        return res.status(404).json({
+          success: false,
+          code: 'FILE_NOT_FOUND_IN_STORAGE',
+          error: `File not found in storage: ${dlErr ? dlErr.message : 'Empty blob'}`
+        });
+      }
+
+      let buffer = Buffer.from(await blob.arrayBuffer());
+      let filename = targetRecord.original_filename || targetRecord.name || 'dataset.csv';
+      let mime = targetRecord.mime_type || (filename.endsWith('.csv') ? 'text/csv' : 'application/octet-stream');
+
+      // Transparent Zip Decompression: If file is a ZIP archive, uncompress it so callers receive the real dataset bytes
+      if (AdmZip && (storagePath.endsWith('.zip') || (buffer.length > 4 && buffer[0] === 0x50 && buffer[1] === 0x4B && buffer[2] === 0x03 && buffer[3] === 0x04))) {
+        try {
+          const zip = new AdmZip(buffer);
+          const entries = zip.getEntries();
+          const targetEntry = entries.find(e => !e.isDirectory && !e.entryName.startsWith('__MACOSX'));
+          if (targetEntry) {
+            buffer = targetEntry.getData();
+            filename = targetEntry.entryName.split('/').pop() || filename.replace(/\.zip$/i, '');
+            if (filename.endsWith('.csv')) mime = 'text/csv';
+            else if (filename.endsWith('.json')) mime = 'application/json';
+            else if (filename.endsWith('.xlsx')) mime = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+          }
+        } catch (zipErr) {
+          console.warn('[Download Unzip Notice]', zipErr.message);
+        }
+      }
+
+      res.setHeader('Content-Type', mime);
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+      res.setHeader('Content-Length', buffer.length);
+      return res.send(buffer);
+    }
+
+    return res.status(400).json({
+      success: false,
+      code: 'STORAGE_CLIENT_UNAVAILABLE',
+      error: 'Supabase storage is not configured or authenticated.'
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, error: `Download failed: ${err.message}` });
   }
 });
 
@@ -2353,6 +3099,7 @@ app.post('/api/projects/:id/datasets', requireAuthenticatedUser, async (req, res
     };
 
     serverProjectsRegistry.set(projectId, updatedProject);
+    await persistProjectState(caller, updatedProject);
 
     return res.status(200).json({
       success: true,
@@ -2411,6 +3158,7 @@ app.delete('/api/projects/:id/datasets/:datasetId', requireAuthenticatedUser, as
         updatedAt: new Date().toISOString()
       };
       serverProjectsRegistry.set(projectId, updatedProject);
+      await persistProjectState(caller, updatedProject);
     }
 
     return res.status(200).json({
@@ -2471,6 +3219,7 @@ app.post('/api/projects/:id/datasets/detach', requireAuthenticatedUser, async (r
         updatedAt: new Date().toISOString()
       };
       serverProjectsRegistry.set(projectId, updatedProject);
+      await persistProjectState(caller, updatedProject);
     }
 
     return res.status(200).json({

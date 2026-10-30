@@ -20,6 +20,9 @@ scratch/
 .parcel-cache/
 dist/
 build/
+data/local_browser_backup/
+data/*_backup*.json
+*.ldb
 
 # OS metadata
 .DS_Store

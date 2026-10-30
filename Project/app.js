@@ -7773,66 +7773,69 @@ window.CANONICAL_PROJECTS = CANONICAL_PROJECTS;
       return () => window.removeEventListener('click', closeMenu);
     }, [openProjectMenuId]);
 
-    // Dynamic counts (faithfully reflects workspace assets or canonical reference when active)
-    const datasetsCount = userDatasets.length > 0 ? (userDatasets.length > 1 ? userDatasets.length : 8) : 0;
-    const insightsCount = activeDatasetDetails?.insights?.length || (userDatasets.length > 0 ? 12 : 0);
-    const modelsCount = userModelsList.length > 0 ? userModelsList.length : (userDatasets.length > 0 ? 3 : 0);
-    const reportsCount = userReportsList.length > 0 ? userReportsList.length : (userDatasets.length > 0 ? 5 : 0);
+    // Dynamic counts (faithfully reflects accessible persisted assets and real zero counts)
+    const datasetsCount = Array.isArray(userDatasets) ? userDatasets.length : 0;
+    const insightsCount = Array.isArray(activeDatasetDetails?.insights) ? activeDatasetDetails.insights.length : 0;
+    const modelsCount = Array.isArray(userModelsList) ? userModelsList.length : 0;
+    const reportsCount = Array.isArray(userReportsList) ? userReportsList.length : 0;
 
-    // Recent activities (renders truthful empty state when 0 datasets, or real items + canonical items matching Screenshot 1)
+    // Recent activities (truthfully reflects actual user assets and actions)
     const activities = React.useMemo(() => {
-      if (!userDatasets || userDatasets.length === 0) {
-        return [];
+      const items = [];
+      if (Array.isArray(userDatasets) && userDatasets.length > 0) {
+        userDatasets.slice(0, 2).forEach((ds, idx) => {
+          items.push({
+            id: `act-ds-${ds.id || idx}`,
+            title: ds.name || ds.original_filename || 'Dataset',
+            desc: 'Dataset uploaded',
+            time: 'Recently',
+            icon: DatabaseIcon,
+            color: '#18C8F4',
+            onClick: () => onNavigate('datasets')
+          });
+        });
       }
-      return [
-        {
-          id: 'act-1',
-          title: userDatasets[0].name || userDatasets[0].original_filename || 'Customer_Segments.csv',
-          desc: 'Dataset uploaded',
-          time: '2h ago',
-          icon: DatabaseIcon,
-          color: '#18C8F4',
-          onClick: () => onNavigate('datasets')
-        },
-        {
-          id: 'act-2',
-          title: 'Churn Analysis',
-          desc: 'Analysis completed',
-          time: '5h ago',
-          icon: TrendingUpIcon,
-          color: '#8B70FF',
-          onClick: () => onNavigate('analytics')
-        },
-        role === 'data_analyst'
-          ? {
-              id: 'act-3',
-              title: 'Revenue Forecast Run',
-              desc: 'Projection complete',
-              time: '1d ago',
-              icon: TrendingUpIcon,
-              color: '#18C8F4',
-              onClick: () => onNavigate('forecasting')
-            }
-          : {
-              id: 'act-3',
-              title: 'Demand Forecast Model',
-              desc: 'Training finished',
-              time: '1d ago',
-              icon: CpuIcon,
-              color: '#18C8F4',
-              onClick: () => onNavigate('models')
-            },
-        {
-          id: 'act-4',
-          title: 'Q3 Executive Report',
-          desc: 'Report generated',
-          time: '1d ago',
-          icon: FileTextIcon,
-          color: '#34D399',
-          onClick: () => onNavigate('reports')
-        }
-      ];
-    }, [userDatasets, userModelsList, userReportsList]);
+      if (Array.isArray(userProjects) && userProjects.length > 0) {
+        userProjects.slice(0, 1).forEach((proj, idx) => {
+          items.push({
+            id: `act-proj-${proj.id || idx}`,
+            title: proj.name || 'Analytics Project',
+            desc: 'Project workspace created',
+            time: 'Recently',
+            icon: SparklesIcon,
+            color: '#38BDF8',
+            onClick: () => onNavigate(`projects/${proj.id}/overview`)
+          });
+        });
+      }
+      if (Array.isArray(userModelsList) && userModelsList.length > 0) {
+        userModelsList.slice(0, 1).forEach((m, idx) => {
+          items.push({
+            id: `act-mdl-${m.id || idx}`,
+            title: m.model_name || m.name || 'Prediction Model',
+            desc: 'Model trained & registered',
+            time: 'Recently',
+            icon: CpuIcon,
+            color: '#8B70FF',
+            onClick: () => onNavigate('models')
+          });
+        });
+      }
+      if (Array.isArray(userReportsList) && userReportsList.length > 0) {
+        userReportsList.slice(0, 1).forEach((rep, idx) => {
+          items.push({
+            id: `act-rep-${rep.id || idx}`,
+            title: rep.name || 'Executive Report',
+            desc: 'Report generated',
+            time: 'Recently',
+            icon: FileTextIcon,
+            color: '#34D399',
+            onClick: () => onNavigate('reports')
+          });
+        });
+      }
+      return items;
+    }, [userDatasets, userProjects, userModelsList, userReportsList]);
 
     // Data health metrics (renders truthful empty state when no dataset, or 92% reference scores when active)
     const qualityMetrics = React.useMemo(() => {
@@ -8247,7 +8250,7 @@ window.CANONICAL_PROJECTS = CANONICAL_PROJECTS;
                   React.createElement('div', null,
                     React.createElement('h4', { className: 'ie-project-card-name' }, p.name),
                     React.createElement('div', { className: 'ie-project-card-meta' },
-                      p.meta || (((p.datasetIds && p.datasetIds.length) || (p.datasetNames && p.datasetNames.length) || p.datasetCount || 1) + ' datasets • ' + (p.insightCount || p.insightsCount || 4) + ' insights')
+                      p.meta || ((((p.datasetIds && p.datasetIds.length) || (p.datasetNames && p.datasetNames.length) || p.datasetCount || 0)) + ' datasets • ' + (p.insightCount || p.insightsCount || 0) + ' insights')
                     )
                   ),
                   React.createElement('div', { style: { position: 'relative' }, onClick: (e) => e.stopPropagation() },
@@ -24929,16 +24932,34 @@ function InsightIQSettingsView({
           const dsResp = await fetch('/api/datasets', { headers: authHeaders });
           if (dsResp.ok) {
             const dsJson = await dsResp.json();
-            if (dsJson.success && Array.isArray(dsJson.datasets) && dsJson.datasets.length > 0) {
+            if (dsJson.success && Array.isArray(dsJson.datasets)) {
               setUserDatasets(prev => {
+                const serverMap = new Map();
+                dsJson.datasets.forEach(d => { if (d && d.id) serverMap.set(d.id, d); });
+
                 const map = new Map();
-                (prev || []).forEach(d => { if (d && d.id) map.set(d.id, d); });
-                dsJson.datasets.forEach(d => {
-                  if (d && d.id && !map.has(d.id)) map.set(d.id, d);
+                serverMap.forEach((d, id) => map.set(id, d));
+                (prev || []).forEach(d => {
+                  if (d && d.id && !serverMap.has(d.id)) {
+                    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(d.id);
+                    if (!isUUID) {
+                      map.set(d.id, d);
+                    }
+                  } else if (d && d.id && serverMap.has(d.id)) {
+                    const srv = serverMap.get(d.id);
+                    map.set(d.id, {
+                      ...srv,
+                      ...d,
+                      ...srv
+                    });
+                  }
                 });
                 const merged = Array.from(map.values());
                 userDatasetsRef.current = merged;
-                try { localStorage.setItem('insightiq_user_datasets', JSON.stringify(merged)); } catch (_) {}
+                try {
+                  localStorage.setItem(`insightiq_user_datasets_${callerId}`, JSON.stringify(merged));
+                  localStorage.setItem('insightiq_user_datasets', JSON.stringify(merged));
+                } catch (_) {}
                 return merged;
               });
             }
@@ -24961,25 +24982,41 @@ function InsightIQSettingsView({
           const projResp = await fetch('/api/projects', { headers: authHeaders });
           if (projResp.ok) {
             const projJson = await projResp.json();
-            if (projJson.success && Array.isArray(projJson.projects) && projJson.projects.length > 0) {
+            if (projJson.success && Array.isArray(projJson.projects)) {
+              const serverDeletedIds = Array.isArray(projJson.deletedProjectIds) ? projJson.deletedProjectIds : [];
+              const combinedDeletedIds = Array.from(new Set([...deletedIds, ...serverDeletedIds]));
+              try { localStorage.setItem('insightiq_deleted_project_ids', JSON.stringify(combinedDeletedIds)); } catch (_) {}
+
               setUserProjects(prev => {
                 const map = new Map();
-                (prev || []).forEach(p => { if (p && p.id && !deletedIds.includes(p.id)) map.set(p.id, p); });
+                (prev || []).forEach(p => {
+                  if (p && p.id && !combinedDeletedIds.includes(p.id)) {
+                    map.set(p.id, p);
+                  }
+                });
                 projJson.projects.forEach(p => {
-                  if (p && p.id && !deletedIds.includes(p.id)) {
+                  if (p && p.id && !combinedDeletedIds.includes(p.id)) {
                     const existing = map.get(p.id);
                     if (!existing) {
                       map.set(p.id, p);
                     } else {
-                      // Merge datasetIds so server-persisted attachments are preserved
                       const mergedIds = Array.from(new Set([...(existing.datasetIds || []), ...(p.datasetIds || [])]));
                       const mergedNames = Array.from(new Set([...(existing.datasetNames || []), ...(p.datasetNames || [])]));
-                      map.set(p.id, { ...existing, datasetIds: mergedIds, datasetNames: mergedNames });
+                      map.set(p.id, {
+                        ...existing,
+                        ...p,
+                        datasetIds: mergedIds,
+                        datasetNames: mergedNames,
+                        stats: { ...(existing.stats || {}), ...(p.stats || {}) }
+                      });
                     }
                   }
                 });
                 const merged = Array.from(map.values());
-                try { localStorage.setItem('insightiq_user_projects', JSON.stringify(merged)); } catch (_) {}
+                try {
+                  localStorage.setItem(`insightiq_user_projects_${callerId}`, JSON.stringify(merged));
+                  localStorage.setItem('insightiq_user_projects', JSON.stringify(merged));
+                } catch (_) {}
                 return merged;
               });
             }
@@ -25283,7 +25320,9 @@ function InsightIQSettingsView({
       const projName = (data.name || '').trim();
       if (!projName) return;
 
-      const newProjectId = `proj-${Date.now()}`;
+      const newProjectId = (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function')
+        ? crypto.randomUUID()
+        : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => { const r = Math.random() * 16 | 0; return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16); });
       const requestedIds = Array.isArray(data.datasetIds) && data.datasetIds.length > 0
         ? data.datasetIds
         : (data.datasetId ? [data.datasetId] : []);
@@ -29959,7 +29998,9 @@ function InsightIQSettingsView({
       const fileType = ext.toUpperCase();
       const datasetName = (meta && meta.name ? meta.name.trim() : '') || file.name.replace(/\.[^/.]+$/, '');
       const targetProjectId = meta && meta.projectId ? meta.projectId : activeProjectId;
-      const datasetId = `ds_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+      const datasetId = (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function')
+        ? crypto.randomUUID()
+        : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => { const r = Math.random() * 16 | 0; return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16); });
       const startTime = Date.now();
 
       setUploadState({ stage: 'UPLOAD_STARTED', progress: 15, fileName: file.name, datasetId, error: null });
@@ -30204,13 +30245,22 @@ function InsightIQSettingsView({
 
         window._datasetCache[datasetId] = { detailsObj, timestamp: Date.now() };
 
-        // Save asynchronously to Supabase if connected with a real session
+        // Save to Supabase database and storage with verified error handling
         if (supabaseClient && session?.user?.id && !String(session?.access_token || '').startsWith('mock-')) {
           try {
             const userId = session.user.id;
             const storagePath = `${userId}/${datasetId}/${file.name}`;
+            // Upload raw file to storage
             await supabaseClient.storage.from('datasets').upload(storagePath, file, { upsert: true });
-            await supabaseClient.from('datasets').insert({
+
+            // Also upload pre-parsed JSON rows to enable instant cross-device hydration on mobile
+            try {
+              const rowsJsonBlob = new Blob([JSON.stringify(rows)], { type: 'application/json' });
+              await supabaseClient.storage.from('datasets').upload(`${userId}/${datasetId}/data.json`, rowsJsonBlob, { upsert: true });
+            } catch (_) {}
+
+            // Insert dataset record into public.datasets
+            const { error: dsInsertErr } = await supabaseClient.from('datasets').upsert({
               id: datasetId,
               user_id: userId,
               name: datasetName,
@@ -30222,24 +30272,38 @@ function InsightIQSettingsView({
               column_count: totalColumns,
               status: 'active',
               upload_source: 'manual_upload'
-            });
-            await supabaseClient.from('dataset_columns').insert(
-              profiledColumns.map(c => ({
+            }, { onConflict: 'id' });
+
+            if (dsInsertErr) {
+              console.warn('[Supabase Dataset Insert Warning]', dsInsertErr.message);
+            }
+
+            // Insert dataset columns adhering strictly to the real database schema
+            if (Array.isArray(profiledColumns) && profiledColumns.length > 0) {
+              const dbCols = profiledColumns.map(c => ({
                 dataset_id: datasetId,
                 column_name: c.column_name,
-                data_type: c.data_type,
-                canonical_type: c.canonical_type,
-                null_percentage: c.null_percentage,
-                unique_values: c.unique_values,
-                sample_values: c.sample_values,
-                is_target: c.is_target,
-                is_numeric: c.is_numeric,
-                is_temporal: c.is_temporal,
-                is_identifier: c.is_identifier
-              }))
-            );
+                data_type: c.data_type || 'TEXT',
+                null_percentage: typeof c.null_percentage === 'number' ? c.null_percentage : 0,
+                unique_values: typeof c.unique_values === 'number' ? c.unique_values : 0,
+                sample_values: Array.isArray(c.sample_values) ? c.sample_values : [],
+                is_target: Boolean(c.is_target)
+              }));
+              await supabaseClient.from('dataset_columns').insert(dbCols).catch(err => {
+                console.warn('[Dataset Column Sync Warning]', err.message);
+              });
+            }
+
+            // Insert dataset quality metrics
+            await supabaseClient.from('dataset_quality').upsert({
+              dataset_id: datasetId,
+              missing_values: totalMissingValues,
+              duplicate_rows: 0,
+              quality_score: qualityScore
+            }, { onConflict: 'dataset_id' }).catch(() => {});
+
           } catch (spErr) {
-            console.warn('[Supabase Sync Notice] Upload active locally, database sync warning:', spErr);
+            console.warn('[Supabase Sync Notice] Database sync warning:', spErr.message || spErr);
           }
         }
 
@@ -30311,7 +30375,9 @@ function InsightIQSettingsView({
             // Auto-create a clean, sensible project for this uploaded dataset
             const autoProjName = generateProjectNameFromDatasetName(datasetName || file.name);
             const autoCategory = inferProjectCategory(profiledColumns, datasetName || file.name);
-            const newProjId = `proj-${Date.now()}`;
+            const newProjId = (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function')
+              ? crypto.randomUUID()
+              : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => { const r = Math.random() * 16 | 0; return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16); });
             effectiveTargetProjectId = newProjId;
 
             const initialWs = {
@@ -30551,35 +30617,98 @@ function InsightIQSettingsView({
 
           let computedFullStats = null;
           let rawRows = window._datasetRowsStore ? (window._datasetRowsStore[datasetId] || []) : [];
-          if ((!rawRows || rawRows.length === 0) && dataset?.storage_path && supabaseClient) {
+          if ((!rawRows || rawRows.length === 0) && typeof InsightIQDB !== 'undefined' && InsightIQDB.getRows) {
             try {
-              const { data: fileBlob } = await supabaseClient.storage.from('datasets').download(dataset.storage_path);
-              if (fileBlob) {
-                const arrayBuffer = await fileBlob.arrayBuffer();
-                const isCsv = (dataset.file_type || '').toLowerCase() === 'csv' || (dataset.original_filename || '').toLowerCase().endsWith('.csv');
-                if (isCsv) {
-                  const text = new TextDecoder('utf-8').decode(arrayBuffer);
-                  const { rows: parsedCsvRows } = parseCSV(text);
-                  rawRows = parsedCsvRows;
-                } else if (window.XLSX) {
-                  const workbook = window.XLSX.read(arrayBuffer, { type: 'array' });
-                  const sheetName = workbook.SheetNames[0];
-                  const worksheet = workbook.Sheets[sheetName];
-                  rawRows = window.XLSX.utils.sheet_to_json(worksheet, { defval: '' });
-                } else {
-                  const text = new TextDecoder('utf-8').decode(arrayBuffer);
-                  const { rows: parsedCsvRows } = parseCSV(text);
-                  rawRows = parsedCsvRows;
-                }
-                if (rawRows.length > 0) {
-                  rawRows = normalizeRowDates(rawRows, columns);
-                  computedFullStats = computeDatasetFullStatistics(rawRows, columns);
-                  window._datasetRowsStore[datasetId] = rawRows;
-                  await InsightIQDB.saveRows(datasetId, rawRows);
-                }
+              const idbRows = await InsightIQDB.getRows(datasetId);
+              if (Array.isArray(idbRows) && idbRows.length > 0) {
+                rawRows = idbRows;
+                if (!window._datasetRowsStore) window._datasetRowsStore = {};
+                window._datasetRowsStore[datasetId] = rawRows;
               }
-            } catch (_e) {
-              console.warn('[Fetch Dataset Details] Storage download notice:', _e);
+            } catch (_) {}
+          }
+          if ((!rawRows || rawRows.length === 0) && datasetId) {
+            const isZip = (dataset?.storage_path || '').toLowerCase().endsWith('.zip');
+            let downloadedText = null;
+
+            if (isZip) {
+              try {
+                let dlToken = session?.access_token || '';
+                if (!dlToken) {
+                  try {
+                    const rawS = localStorage.getItem('insightiq_user_session');
+                    if (rawS) dlToken = JSON.parse(rawS)?.access_token || '';
+                  } catch (_) {}
+                }
+                const callerId = session?.user?.id || userProfile?.id || '';
+                const dlHeaders = {
+                  ...(dlToken ? { 'Authorization': `Bearer ${dlToken}` } : {}),
+                  ...(callerId ? { 'x-user-id': callerId } : {})
+                };
+                const dlResp = await fetch(`/api/datasets/${encodeURIComponent(datasetId)}/download`, {
+                  headers: dlHeaders
+                });
+                if (dlResp.ok) {
+                  downloadedText = await dlResp.text();
+                }
+              } catch (_zipErr) {
+                console.warn('[Fetch Dataset Details] Server unzipping download error:', _zipErr);
+              }
+            } else if (dataset?.storage_path && supabaseClient) {
+              try {
+                const { data: fileBlob, error: sbDlErr } = await supabaseClient.storage.from('datasets').download(dataset.storage_path);
+                if (fileBlob && !sbDlErr) {
+                  const arrayBuffer = await fileBlob.arrayBuffer();
+                  const isXlsx = (dataset.file_type || '').toLowerCase().includes('xls') || (dataset.original_filename || '').toLowerCase().endsWith('.xlsx');
+                  if (isXlsx && window.XLSX) {
+                    const workbook = window.XLSX.read(arrayBuffer, { type: 'array' });
+                    const sheetName = workbook.SheetNames[0];
+                    const worksheet = workbook.Sheets[sheetName];
+                    rawRows = window.XLSX.utils.sheet_to_json(worksheet, { defval: '' });
+                  } else {
+                    downloadedText = new TextDecoder('utf-8').decode(arrayBuffer);
+                  }
+                }
+              } catch (_sbErr) {
+                console.warn('[Fetch Dataset Details] Supabase direct download notice:', _sbErr);
+              }
+            }
+
+            if ((!rawRows || rawRows.length === 0) && !downloadedText) {
+              try {
+                let dlToken = session?.access_token || '';
+                if (!dlToken) {
+                  try {
+                    const rawS = localStorage.getItem('insightiq_user_session');
+                    if (rawS) dlToken = JSON.parse(rawS)?.access_token || '';
+                  } catch (_) {}
+                }
+                const callerId = session?.user?.id || userProfile?.id || '';
+                const dlResp = await fetch(`/api/datasets/${encodeURIComponent(datasetId)}/download`, {
+                  headers: {
+                    ...(dlToken ? { 'Authorization': `Bearer ${dlToken}` } : {}),
+                    ...(callerId ? { 'x-user-id': callerId } : {})
+                  }
+                });
+                if (dlResp.ok) {
+                  downloadedText = await dlResp.text();
+                }
+              } catch (_) {}
+            }
+
+            if (downloadedText) {
+              const { rows: parsedCsvRows } = parseCSV(downloadedText);
+              rawRows = parsedCsvRows;
+            }
+
+            if (rawRows && rawRows.length > 0) {
+              rawRows = normalizeRowDates(rawRows, columns);
+              computedFullStats = computeDatasetFullStatistics(rawRows, columns);
+              if (!window._datasetRowsStore) window._datasetRowsStore = {};
+              window._datasetRowsStore[datasetId] = rawRows;
+              if (typeof InsightIQDB !== 'undefined' && InsightIQDB.saveRows) {
+                await InsightIQDB.saveRows(datasetId, rawRows);
+              }
             }
           }
           if (!rawRows || rawRows.length === 0) {
@@ -32037,13 +32166,34 @@ function InsightIQSettingsView({
               }
             }
 
-            if (targetRows.length === 0 && targetDs.storage_path && supabaseClient) {
+            if (targetRows.length === 0 && targetDs && supabaseClient) {
               try {
-                const downloadPromise = supabaseClient.storage.from('datasets').download(targetDs.storage_path);
-                const { data: fileBlob, error: dlErr } = await asyncWithTimeout(downloadPromise, 8000, 'Storage download timed out after 8s');
-                if (dlErr) throw dlErr;
-                if (fileBlob) {
-                  const arrayBuffer = await fileBlob.arrayBuffer();
+                // First try pre-parsed data.json for instant mobile hydration
+                const dsOwner = targetDs.user_id || targetUserId;
+                if (dsOwner && targetId) {
+                  const { data: jsonBlob } = await supabaseClient.storage.from('datasets').download(`${dsOwner}/${targetId}/data.json`).catch(() => ({ data: null }));
+                  if (jsonBlob) {
+                    try {
+                      const text = await jsonBlob.text();
+                      const parsed = JSON.parse(text);
+                      if (Array.isArray(parsed) && parsed.length > 0) {
+                        targetRows = parsed;
+                        window._datasetRowsStore[targetId] = targetRows;
+                        await InsightIQDB.saveRows(targetId, targetRows);
+                      }
+                    } catch (_) {}
+                  }
+                }
+
+                let downloadedFileBlob = null;
+                const isZip = (targetDs.storage_path || '').toLowerCase().endsWith('.zip');
+                if (targetRows.length === 0 && targetDs.storage_path && !isZip) {
+                  const downloadPromise = supabaseClient.storage.from('datasets').download(targetDs.storage_path);
+                  const { data: rawBlob, error: storageDlErr } = await asyncWithTimeout(downloadPromise, 8000, 'Storage download timed out after 8s');
+                  if (!storageDlErr) downloadedFileBlob = rawBlob;
+                }
+                if (downloadedFileBlob) {
+                  const arrayBuffer = await downloadedFileBlob.arrayBuffer();
                   const isCsv = (targetDs.file_type || '').toLowerCase() === 'csv' || (targetDs.original_filename || '').toLowerCase().endsWith('.csv');
                   if (isCsv) {
                     const text = new TextDecoder('utf-8').decode(arrayBuffer);
@@ -32058,6 +32208,35 @@ function InsightIQSettingsView({
                   if (targetRows.length > 0) {
                     window._datasetRowsStore[targetId] = targetRows;
                     await InsightIQDB.saveRows(targetId, targetRows);
+                  }
+                }
+                if (targetRows.length === 0 && targetId) {
+                  try {
+                    let dlToken = session?.access_token || '';
+                    if (!dlToken) {
+                      try {
+                        const rawS = localStorage.getItem('insightiq_user_session');
+                        if (rawS) dlToken = JSON.parse(rawS)?.access_token || '';
+                      } catch (_) {}
+                    }
+                    const dlHeaders = {
+                      ...(dlToken ? { 'Authorization': `Bearer ${dlToken}` } : {}),
+                      ...(targetUserId ? { 'x-user-id': targetUserId } : {})
+                    };
+                    const dlResp = await fetch(`/api/datasets/${encodeURIComponent(targetId)}/download`, {
+                      headers: dlHeaders
+                    });
+                    if (dlResp.ok) {
+                      const csvText = await dlResp.text();
+                      const { rows: parsedRows } = parseCSV(csvText);
+                      if (parsedRows && parsedRows.length > 0) {
+                        targetRows = parsedRows;
+                        window._datasetRowsStore[targetId] = targetRows;
+                        await InsightIQDB.saveRows(targetId, targetRows);
+                      }
+                    }
+                  } catch (_serverDlErr) {
+                    console.warn('[DatasetLifecycle] Server download fallback warning:', _serverDlErr);
                   }
                 }
               } catch (dlErr) {
@@ -32581,6 +32760,10 @@ function InsightIQSettingsView({
         localStorage.removeItem('insightiq_user_profile');
         localStorage.removeItem('insightiq_supabase_auth_token');
         localStorage.removeItem('insightiq_dev_preview_role');
+        localStorage.removeItem('insightiq_active_project_id');
+        localStorage.removeItem('insightiq_active_dataset_id');
+        localStorage.removeItem('insightiq_user_projects');
+        localStorage.removeItem('insightiq_user_datasets');
         for (let i = localStorage.length - 1; i >= 0; i--) {
           const k = localStorage.key(i);
           if (k && k.startsWith('sb-') && k.endsWith('-auth-token')) {
@@ -32588,6 +32771,17 @@ function InsightIQSettingsView({
           }
         }
       } catch (e) {}
+      setUserDatasets([]);
+      setUserProjects([]);
+      setActiveDatasetId(null);
+      setActiveProjectId(null);
+      setActiveDatasetDetails(null);
+      userDatasetsRef.current = [];
+      if (typeof window !== 'undefined') {
+        window._datasetRowsStore = {};
+        window._datasetCache = {};
+        window._datasetPreprocessedCache = {};
+      }
       setSession(null);
       setUserProfile(null);
       setFeedback(null);
@@ -32748,7 +32942,7 @@ function InsightIQSettingsView({
     }
 
     /* ------------------------------------------------------------------------
-       A. AUTHENTICATED PRODUCTION DASHBOARD WORKSPACE VIEW
+    A. AUTHENTICATED PRODUCTION DASHBOARD WORKSPACE VIEW
        ------------------------------------------------------------------------ */
     
     /* Redesigned Workspace Hooks (Declared unconditionally before conditional render) */
