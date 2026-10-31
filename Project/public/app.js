@@ -1272,30 +1272,40 @@ function calculateProjectProgress(project, datasets = [], reports = [], columns 
   }
 
   // 1. Stage 1: Project Created / Configured
-  if (project.name && project.name.trim().length > 0) {
-    ws.projectConfigured = true;
+  if (ws.projectConfigured == null) {
+    if (project.name && project.name.trim().length > 0) {
+      ws.projectConfigured = true;
+    }
   }
 
   // 2. Stage 2: Dataset Connected / Attached
-  if (projectHasDatasetIds || projectHasDatasetNames || matchedDataset) {
-    ws.datasetAttached = true;
+  if (ws.datasetAttached == null) {
+    if (projectHasDatasetIds || projectHasDatasetNames || matchedDataset) {
+      ws.datasetAttached = true;
+    }
   }
 
   // 3. Stage 3: Dataset Profiled (has schema columns or quality metrics)
-  if (matchedDataset?.quality_score != null || matchedDataset?.quality?.quality_score != null || targetCols.length > 0) {
-    ws.profilingComplete = true;
+  if (ws.profilingComplete == null) {
+    if (matchedDataset?.quality_score != null || matchedDataset?.quality?.quality_score != null || targetCols.length > 0) {
+      ws.profilingComplete = true;
+    }
   }
 
   // 4. Stage 4: Analysis Completed (profiled dataset ready or analysis performed)
-  if (ws.profilingComplete && targetCols.length > 0) {
-    if (ws.analyticsComplete !== false && (ws.analyticsComplete || project.analyticsReady || matchedDataset)) {
-      ws.analyticsComplete = true;
+  if (ws.analyticsComplete == null) {
+    if (ws.profilingComplete && targetCols.length > 0) {
+      if (project.analyticsReady || matchedDataset) {
+        ws.analyticsComplete = true;
+      }
     }
   }
 
   // 5. Stage 5: AI Insights / Modeling Generated
-  if (ws.modelingComplete || ws.aiInsightsComplete || project.aiInsightsReady || (matchedDataset && targetCols.some(c => c.is_numeric))) {
-    ws.modelingComplete = true;
+  if (ws.modelingComplete == null) {
+    if (ws.aiInsightsComplete || project.aiInsightsReady || (matchedDataset && targetCols.some(c => c.is_numeric))) {
+      ws.modelingComplete = true;
+    }
   }
 
   // 6. Stage 6: Geographic Intelligence Completed (if applicable and geo analysis generated/available)
@@ -1307,14 +1317,16 @@ function calculateProjectProgress(project, datasets = [], reports = [], columns 
   }
 
   // 7. Stage 7: Report Generated
-  if (reports && reports.length > 0) {
-    const hasProjectReport = reports.some(r => 
-      r.projectId === project.id || 
-      (project.datasetIds && project.datasetIds.includes(r.datasetId)) ||
-      (matchedDataset && r.datasetId === matchedDataset.id)
-    );
-    if (hasProjectReport) {
-      ws.reportGenerated = true;
+  if (ws.reportGenerated == null) {
+    if (reports && reports.length > 0) {
+      const hasProjectReport = reports.some(r => 
+        r.projectId === project.id || 
+        (project.datasetIds && project.datasetIds.includes(r.datasetId)) ||
+        (matchedDataset && r.datasetId === matchedDataset.id)
+      );
+      if (hasProjectReport) {
+        ws.reportGenerated = true;
+      }
     }
   }
 
@@ -1339,13 +1351,21 @@ function calculateProjectProgress(project, datasets = [], reports = [], columns 
     };
   });
 
-  const completionPercentage = applicableStages > 0 
+  const calculatedPercentage = applicableStages > 0 
     ? Math.min(100, Math.round((completedStages / applicableStages) * 100)) 
     : 0;
+
+  // Authoritative canonical progress from project record takes precedence if present
+  const hasCanonicalProgress = typeof project.progress === 'number' && !isNaN(project.progress);
+  const completionPercentage = hasCanonicalProgress ? Math.max(0, Math.min(100, Math.round(project.progress))) : calculatedPercentage;
 
   let status = 'Not Started';
   if (completionPercentage >= 100 || ws.projectFinalized) {
     status = 'Completed';
+  } else if (project.status && project.status !== 'active') {
+    status = project.status;
+  } else if (project.health) {
+    status = project.health;
   } else if (completionPercentage >= 75) {
     status = 'Nearly Complete';
   } else if (completionPercentage >= 50) {
@@ -8822,6 +8842,8 @@ window.CANONICAL_PROJECTS = CANONICAL_PROJECTS;
         ) : React.createElement('div', { className: 'projects-grid' },
           allProjects.map(p => {
             const pProg = calculateProjectProgress(p);
+            const effectiveScore = (typeof p.progress === 'number' && !isNaN(p.progress)) ? p.progress : pProg.score;
+            const effectiveStatus = (effectiveScore === 100) ? 'Completed' : (p.status && p.status !== 'active' ? p.status : (p.health || pProg.status || 'On Track'));
             const isMenuOpen = openPmMenuId === p.id;
             return React.createElement('div', {
               key: p.id,
@@ -8832,7 +8854,7 @@ window.CANONICAL_PROJECTS = CANONICAL_PROJECTS;
               React.createElement('div', { className: 'project-card-top' },
                 React.createElement('span', { className: 'project-category-tag' }, p.category),
                 React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 8 } },
-                  React.createElement('span', { className: `project-health-badge ${pProg.score === 100 ? 'health-ontrack' : (p.healthStatus === 'atrisk' ? 'health-atrisk' : 'health-ontrack')}` }, pProg.score === 100 ? 'Completed' : (p.health || 'On Track')),
+                  React.createElement('span', { className: `project-health-badge ${effectiveScore === 100 ? 'health-ontrack' : (p.healthStatus === 'atrisk' ? 'health-atrisk' : 'health-ontrack')}` }, effectiveScore === 100 ? 'Completed' : (p.health || effectiveStatus || 'On Track')),
                   React.createElement('div', { style: { position: 'relative' }, onClick: (e) => e.stopPropagation() },
                     React.createElement('button', {
                       type: 'button',
@@ -8881,10 +8903,10 @@ window.CANONICAL_PROJECTS = CANONICAL_PROJECTS;
               React.createElement('div', { className: 'project-progress-wrap' },
                 React.createElement('div', { className: 'project-progress-header' },
                   React.createElement('span', null, `${pProg.completedCount} of ${pProg.totalStages} stages complete`),
-                  React.createElement('span', { style: { fontWeight: 700, color: pProg.score === 100 ? '#34D399' : '#38BDF8' } }, `${pProg.score}%`)
+                  React.createElement('span', { style: { fontWeight: 700, color: effectiveScore === 100 ? '#34D399' : '#38BDF8' } }, `${effectiveScore}%`)
                 ),
                 React.createElement('div', { className: 'project-progress-bar' },
-                  React.createElement('div', { className: 'project-progress-fill', style: { width: `${pProg.score}%`, background: pProg.score === 100 ? 'linear-gradient(90deg, #34D399 0%, #10B981 100%)' : 'linear-gradient(90deg, #38BDF8 0%, #818CF8 100%)' } })
+                  React.createElement('div', { className: 'project-progress-fill', style: { width: `${effectiveScore}%`, background: effectiveScore === 100 ? 'linear-gradient(90deg, #34D399 0%, #10B981 100%)' : 'linear-gradient(90deg, #38BDF8 0%, #818CF8 100%)' } })
                 )
               ),
               React.createElement('div', { className: 'project-meta-stats' },
@@ -17606,7 +17628,8 @@ window.CANONICAL_PROJECTS = CANONICAL_PROJECTS;
     onGenerateReport,
     onDownloadReport,
     onPreviewReport,
-    isReportGenerating
+    isReportGenerating,
+    isProjectsLoading = false
   }) {
     // Compute allProjects — clean workspace defaults to empty array
     const allProjects = (projects && projects.length > 0) ? projects : [];
@@ -17733,6 +17756,23 @@ window.CANONICAL_PROJECTS = CANONICAL_PROJECTS;
       return () => window.removeEventListener('hashchange', syncFromHash);
     }, [allProjects, activeProjectId, effectiveRole]);
 
+    // Show graceful loading skeleton while projects are loading
+    if (isProjectsLoading && allProjects.length === 0) {
+      return React.createElement('div', { className: 'animate-fade-in', style: { width: '100%', padding: '24px 0' } },
+        React.createElement('div', { className: 'overview-header', style: { marginBottom: 24 } },
+          React.createElement('div', null,
+            React.createElement('h1', { style: { fontSize: '1.625rem', fontWeight: 800, color: '#FFFFFF', margin: 0, letterSpacing: '-0.02em' } }, 'Shared Enterprise Projects'),
+            React.createElement('p', { style: { fontSize: '0.875rem', color: '#9CA3AF', marginTop: 4 } }, 'Collaborative business initiatives, dataset linkages, models, and milestone tracking.')
+          )
+        ),
+        React.createElement('div', { className: 'empty-state-card', style: { padding: '64px 32px', textAlign: 'center' } },
+          React.createElement('div', { className: 'loading-spinner', style: { margin: '0 auto 16px auto', width: 36, height: 36, border: '3px solid rgba(56, 189, 248, 0.2)', borderTopColor: '#38BDF8', borderRadius: '50%', animation: 'spin 1s linear infinite' } }),
+          React.createElement('h3', { style: { fontSize: '1.125rem', fontWeight: 600, color: '#FFFFFF', marginBottom: 8 } }, 'Loading Enterprise Projects...'),
+          React.createElement('p', { style: { fontSize: '0.875rem', color: '#9CA3AF', margin: '0 auto' } }, 'Synchronizing authoritative projects from the enterprise database.')
+        )
+      );
+    }
+
     // Show genuine empty state only if truly no projects exist anywhere
     if (allProjects.length === 0) {
       return React.createElement('div', { className: 'animate-fade-in', style: { width: '100%', padding: '24px 0' } },
@@ -17774,6 +17814,8 @@ window.CANONICAL_PROJECTS = CANONICAL_PROJECTS;
 
     const activeProj = allProjects.find(p => p.id === selectedProjectId) || allProjects[0];
     const activeProgress = calculateProjectProgress(activeProj, userDatasets, userReportsList);
+    const effectiveActiveScore = (typeof activeProj?.progress === 'number' && !isNaN(activeProj.progress)) ? activeProj.progress : activeProgress.score;
+    const effectiveActiveStatus = (effectiveActiveScore === 100) ? 'Completed' : (activeProj?.status && activeProj.status !== 'active' ? activeProj.status : (activeProj?.health || activeProgress.status || 'On Track'));
     const nextAction = getNextActionForProject(activeProgress);
 
     // Extract dynamic categories across all active projects
@@ -17850,6 +17892,8 @@ window.CANONICAL_PROJECTS = CANONICAL_PROJECTS;
         React.createElement('div', { className: 'projects-grid' },
           filteredProjects.map(p => {
             const pProg = calculateProjectProgress(p, userDatasets, userReportsList);
+            const effectiveScore = (typeof p.progress === 'number' && !isNaN(p.progress)) ? p.progress : pProg.score;
+            const effectiveStatus = (effectiveScore === 100) ? 'Completed' : (p.status && p.status !== 'active' ? p.status : (p.health || pProg.status || 'On Track'));
             const connectedDsCount = (p.datasetIds?.length || (p.datasetNames?.length ? 1 : 0));
             const recordsLabel = p.stats?.records || (connectedDsCount > 0 ? `${connectedDsCount} Connected DS` : 'No Dataset');
             const modelsLabel = (p.models?.length ? `${p.models.length} Models` : (p.stats?.models || '0'));
@@ -17867,8 +17911,8 @@ window.CANONICAL_PROJECTS = CANONICAL_PROJECTS;
                 React.createElement('span', { className: 'project-category-tag' }, p.category || 'General Analytics'),
                 React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 8 } },
                   React.createElement('span', {
-                    className: `project-health-badge ${pProg.score === 100 ? 'health-ontrack' : (p.healthStatus === 'atrisk' ? 'health-atrisk' : 'health-ontrack')}`
-                  }, pProg.score === 100 ? 'Completed' : (p.health || 'On Track')),
+                    className: `project-health-badge ${effectiveScore === 100 ? 'health-ontrack' : (p.healthStatus === 'atrisk' ? 'health-atrisk' : 'health-ontrack')}`
+                  }, effectiveScore === 100 ? 'Completed' : (p.health || effectiveStatus || 'On Track')),
                   React.createElement('div', { style: { position: 'relative' }, onClick: (e) => e.stopPropagation() },
                     React.createElement('button', {
                       type: 'button',
@@ -17921,23 +17965,23 @@ window.CANONICAL_PROJECTS = CANONICAL_PROJECTS;
                   React.createElement('span', { style: { fontSize: '0.8125rem', color: '#9CA3AF' } },
                     `${pProg.completedCount} of ${pProg.totalStages} stages complete`
                   ),
-                  React.createElement('span', { style: { fontWeight: 700, color: pProg.score === 100 ? '#34D399' : '#38BDF8' } },
-                    `${pProg.score}%`
+                  React.createElement('span', { style: { fontWeight: 700, color: effectiveScore === 100 ? '#34D399' : '#38BDF8' } },
+                    `${effectiveScore}%`
                   )
                 ),
                 React.createElement('div', { className: 'project-progress-bar' },
                   React.createElement('div', {
                     className: 'project-progress-fill',
                     style: {
-                      width: `${pProg.score}%`,
-                      background: pProg.score === 100 ? 'linear-gradient(90deg, #34D399 0%, #10B981 100%)' : 'linear-gradient(90deg, #38BDF8 0%, #818CF8 100%)'
+                      width: `${effectiveScore}%`,
+                      background: effectiveScore === 100 ? 'linear-gradient(90deg, #34D399 0%, #10B981 100%)' : 'linear-gradient(90deg, #38BDF8 0%, #818CF8 100%)'
                     }
                   })
                 )
               ),
               React.createElement('div', { className: 'project-meta-stats' },
                 React.createElement('div', null,
-                  React.createElement('div', { className: 'project-meta-stat-val' }, pProg.status),
+                  React.createElement('div', { className: 'project-meta-stat-val' }, effectiveStatus),
                   React.createElement('div', { className: 'project-meta-stat-lbl' }, 'LIFECYCLE STATUS')
                 ),
                 React.createElement('div', null,
@@ -18021,19 +18065,19 @@ window.CANONICAL_PROJECTS = CANONICAL_PROJECTS;
             React.createElement('div', { className: 'project-lens-badge-group' },
               React.createElement('span', { className: 'project-category-tag' }, activeProj.category || 'General Analytics'),
               React.createElement('span', {
-                className: `project-health-badge ${activeProgress.score === 100 ? 'health-ontrack' : (activeProj.healthStatus === 'atrisk' ? 'health-atrisk' : 'health-ontrack')}`
-              }, activeProgress.score === 100 ? 'Completed' : (activeProj.health || 'On Track')),
+                className: `project-health-badge ${effectiveActiveScore === 100 ? 'health-ontrack' : (activeProj.healthStatus === 'atrisk' ? 'health-atrisk' : 'health-ontrack')}`
+              }, effectiveActiveScore === 100 ? 'Completed' : (activeProj.health || effectiveActiveStatus || 'On Track')),
               React.createElement('span', { style: { fontSize: '0.8125rem', color: '#9CA3AF' } }, `Owner: ${activeProj.owner || 'Alex Rivera'} (${activeProj.ownerRole || 'Data Analyst'})`)
             ),
             React.createElement('h1', { className: 'project-lens-title' }, activeProj.name),
             React.createElement('p', { style: { color: '#9CA3AF', fontSize: '0.9375rem', margin: '8px 0 0 0', maxWidth: 800 } }, activeProj.description)
           ),
           React.createElement('div', { style: { display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8 } },
-            React.createElement('div', { style: { fontSize: '1.375rem', fontWeight: 800, color: activeProgress.score === 100 ? '#34D399' : '#38BDF8' } },
-              `${activeProgress.score}% Completed`
+            React.createElement('div', { style: { fontSize: '1.375rem', fontWeight: 800, color: effectiveActiveScore === 100 ? '#34D399' : '#38BDF8' } },
+              `${effectiveActiveScore}% Completed`
             ),
             React.createElement('div', { style: { fontSize: '0.8125rem', color: '#9CA3AF', textAlign: 'right' } },
-              `${activeProgress.status} • ${activeProgress.completedCount} of ${activeProgress.totalStages} stages`
+              `${effectiveActiveStatus} • ${activeProgress.completedCount} of ${activeProgress.totalStages} stages`
             ),
             React.createElement('div', { className: 'project-team-avatars', style: { marginTop: 4 } },
               (activeProj.members || []).map((m, idx) =>
@@ -18064,7 +18108,7 @@ window.CANONICAL_PROJECTS = CANONICAL_PROJECTS;
           React.createElement('div', { className: 'kpi-grid' },
             React.createElement('div', { className: 'kpi-card' },
               React.createElement('div', { className: 'kpi-header' }, React.createElement('span', { className: 'kpi-title' }, 'PROJECT COMPLETION')),
-              React.createElement('div', { className: 'kpi-value', style: { color: activeProgress.score === 100 ? '#34D399' : '#38BDF8' } }, `${activeProgress.score}%`),
+              React.createElement('div', { className: 'kpi-value', style: { color: effectiveActiveScore === 100 ? '#34D399' : '#38BDF8' } }, `${effectiveActiveScore}%`),
               React.createElement('div', { className: 'kpi-subtext' }, `${activeProgress.completedCount} of 8 lifecycle stages completed`)
             ),
             React.createElement('div', { className: 'kpi-card', onClick: () => handleTabClick('datasets'), style: { cursor: 'pointer' } },
@@ -23891,6 +23935,15 @@ function InsightIQSettingsView({
         return [];
       }
     });
+    const [isProjectsLoading, setIsProjectsLoading] = React.useState(() => {
+      try {
+        const saved = localStorage.getItem('insightiq_user_projects');
+        const parsed = saved ? JSON.parse(saved) : [];
+        return !Array.isArray(parsed) || parsed.length === 0;
+      } catch (_) {
+        return true;
+      }
+    });
     const [activeProjectId, setActiveProjectId] = React.useState(() => {
       try {
         // Only restore if the saved project ID actually exists in userProjects localStorage
@@ -24882,34 +24935,44 @@ function InsightIQSettingsView({
 
     // Synchronize userDatasets and userProjects with authenticated server registry across refreshes & logins
     React.useEffect(() => {
+      let isMounted = true;
       const callerId = session?.user?.id || userProfile?.id || 'local-user';
       const callerEmail = (session?.user?.email || userProfile?.email || 'alex@insightiq.ai').toLowerCase();
       const callerRole = userProfile?.role || 'Data Analyst';
-      let token = session?.access_token || '';
-      if (!token) {
-        try {
-          const rawSess = localStorage.getItem('insightiq_user_session');
-          if (rawSess) {
-            const parsed = JSON.parse(rawSess);
-            token = parsed?.access_token || parsed?.currentSession?.access_token || '';
-          }
-        } catch (_) {}
-      }
-      if (!token && isDevelopmentEnvironment()) {
-        token = `mock-user-${callerId}`;
-      }
-      if (!token) return;
-
-      const authHeaders = {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`,
-        'x-user-id': String(callerId),
-        'x-user-email': String(callerEmail),
-        'x-user-role': String(callerRole)
-      };
 
       (async () => {
         try {
+          let token = session?.access_token || '';
+          if (!token) {
+            try {
+              const rawSess = localStorage.getItem('insightiq_user_session');
+              if (rawSess) {
+                const parsed = JSON.parse(rawSess);
+                token = parsed?.access_token || parsed?.currentSession?.access_token || '';
+              }
+            } catch (_) {}
+          }
+          if (!token && typeof resolveCurrentAuthToken === 'function') {
+            try {
+              token = await resolveCurrentAuthToken();
+            } catch (_) {}
+          }
+          if (!token && isDevelopmentEnvironment()) {
+            token = `mock-user-${callerId}`;
+          }
+          if (!token) {
+            if (isMounted) setIsProjectsLoading(false);
+            return;
+          }
+
+          const authHeaders = {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+            'x-user-id': String(callerId),
+            'x-user-email': String(callerEmail),
+            'x-user-role': String(callerRole)
+          };
+
           // 1. Register local datasets with server & hydrate any missing server datasets
           const localDs = Array.isArray(userDatasetsRef.current) ? userDatasetsRef.current : [];
           for (const ds of localDs) {
@@ -24933,39 +24996,41 @@ function InsightIQSettingsView({
           if (dsResp.ok) {
             const dsJson = await dsResp.json();
             if (dsJson.success && Array.isArray(dsJson.datasets)) {
-              setUserDatasets(prev => {
-                const serverMap = new Map();
-                dsJson.datasets.forEach(d => { if (d && d.id) serverMap.set(d.id, d); });
+              if (isMounted) {
+                setUserDatasets(prev => {
+                  const serverMap = new Map();
+                  dsJson.datasets.forEach(d => { if (d && d.id) serverMap.set(d.id, d); });
 
-                const map = new Map();
-                serverMap.forEach((d, id) => map.set(id, d));
-                (prev || []).forEach(d => {
-                  if (d && d.id && !serverMap.has(d.id)) {
-                    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(d.id);
-                    if (!isUUID) {
-                      map.set(d.id, d);
+                  const map = new Map();
+                  serverMap.forEach((d, id) => map.set(id, d));
+                  (prev || []).forEach(d => {
+                    if (d && d.id && !serverMap.has(d.id)) {
+                      const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(d.id);
+                      if (!isUUID) {
+                        map.set(d.id, d);
+                      }
+                    } else if (d && d.id && serverMap.has(d.id)) {
+                      const srv = serverMap.get(d.id);
+                      map.set(d.id, {
+                        ...srv,
+                        ...d,
+                        ...srv
+                      });
                     }
-                  } else if (d && d.id && serverMap.has(d.id)) {
-                    const srv = serverMap.get(d.id);
-                    map.set(d.id, {
-                      ...srv,
-                      ...d,
-                      ...srv
-                    });
-                  }
+                  });
+                  const merged = Array.from(map.values());
+                  userDatasetsRef.current = merged;
+                  try {
+                    localStorage.setItem(`insightiq_user_datasets_${callerId}`, JSON.stringify(merged));
+                    localStorage.setItem('insightiq_user_datasets', JSON.stringify(merged));
+                  } catch (_) {}
+                  return merged;
                 });
-                const merged = Array.from(map.values());
-                userDatasetsRef.current = merged;
-                try {
-                  localStorage.setItem(`insightiq_user_datasets_${callerId}`, JSON.stringify(merged));
-                  localStorage.setItem('insightiq_user_datasets', JSON.stringify(merged));
-                } catch (_) {}
-                return merged;
-              });
+              }
             }
           }
 
-          // 2. Register local projects with server & hydrate any missing server projects
+          // 2. Register local projects with server & hydrate authoritative server projects
           const rawDeleted = localStorage.getItem('insightiq_deleted_project_ids');
           const deletedIds = rawDeleted ? JSON.parse(rawDeleted) : [];
           const localProjs = Array.isArray(userProjects) ? userProjects : [];
@@ -24984,46 +25049,42 @@ function InsightIQSettingsView({
             const projJson = await projResp.json();
             if (projJson.success && Array.isArray(projJson.projects)) {
               const serverDeletedIds = Array.isArray(projJson.deletedProjectIds) ? projJson.deletedProjectIds : [];
-              const combinedDeletedIds = Array.from(new Set([...deletedIds, ...serverDeletedIds]));
+              const combinedDeletedIds = Array.from(new Set([...serverDeletedIds]));
               try { localStorage.setItem('insightiq_deleted_project_ids', JSON.stringify(combinedDeletedIds)); } catch (_) {}
 
-              setUserProjects(prev => {
-                const map = new Map();
-                (prev || []).forEach(p => {
-                  if (p && p.id && !combinedDeletedIds.includes(p.id)) {
-                    map.set(p.id, p);
-                  }
-                });
-                projJson.projects.forEach(p => {
-                  if (p && p.id && !combinedDeletedIds.includes(p.id)) {
-                    const existing = map.get(p.id);
-                    if (!existing) {
+              if (isMounted) {
+                setUserProjects(prev => {
+                  const map = new Map();
+                  // Any project returned directly by the server is active, authoritative, and non-deleted
+                  projJson.projects.forEach(p => {
+                    if (p && p.id) {
                       map.set(p.id, p);
-                    } else {
-                      const mergedIds = Array.from(new Set([...(existing.datasetIds || []), ...(p.datasetIds || [])]));
-                      const mergedNames = Array.from(new Set([...(existing.datasetNames || []), ...(p.datasetNames || [])]));
-                      map.set(p.id, {
-                        ...existing,
-                        ...p,
-                        datasetIds: mergedIds,
-                        datasetNames: mergedNames,
-                        stats: { ...(existing.stats || {}), ...(p.stats || {}) }
-                      });
                     }
-                  }
+                  });
+                  // Also retain any local projects that are not on server yet (and not deleted)
+                  (prev || []).forEach(p => {
+                    if (p && p.id && !map.has(p.id) && !combinedDeletedIds.includes(p.id)) {
+                      map.set(p.id, p);
+                    }
+                  });
+                  const merged = Array.from(map.values());
+                  try {
+                    localStorage.setItem(`insightiq_user_projects_${callerId}`, JSON.stringify(merged));
+                    localStorage.setItem('insightiq_user_projects', JSON.stringify(merged));
+                  } catch (_) {}
+                  return merged;
                 });
-                const merged = Array.from(map.values());
-                try {
-                  localStorage.setItem(`insightiq_user_projects_${callerId}`, JSON.stringify(merged));
-                  localStorage.setItem('insightiq_user_projects', JSON.stringify(merged));
-                } catch (_) {}
-                return merged;
-              });
+              }
             }
           }
-        } catch (_err) {}
+        } catch (_err) {
+        } finally {
+          if (isMounted) setIsProjectsLoading(false);
+        }
       })();
-    }, [session?.user?.id, userProfile?.id]);
+
+      return () => { isMounted = false; };
+    }, [session?.user?.id, session?.access_token, userProfile?.id, activeNav]);
 
     const [createProjectForm, setCreateProjectForm] = React.useState({
       name: '',
@@ -35689,6 +35750,7 @@ function InsightIQSettingsView({
                 ),
 
                 can(effectiveRole, 'projects.view') && activeNav === 'projects' && React.createElement(SharedProjectsView, {
+                  isProjectsLoading,
                   onOpenCreateProjectModal: () => setIsCreateProjectModalOpen(true),
                   onSeedDemoData: handleSeedDemoData,
                   effectiveRole,
